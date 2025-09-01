@@ -69,48 +69,14 @@ async function uploadToR2(filePath, key) {
 // FFmpeg处理水印 - 使用ffmpeg-on-vercel方式
 async function processWatermark(videoPath, watermarkPath, outputPath) {
     return new Promise((resolve, reject) => {
-        // 获取正确的FFmpeg路径
-        let ffmpegPath = ffmpeg || 'ffmpeg';
+        console.log(`Processing video: ${videoPath}`);
+        console.log(`Watermark: ${watermarkPath}`);
+        console.log(`Output: ${outputPath}`);
         
-        // 在Vercel环境中使用系统FFmpeg
-        if (process.env.VERCEL) {
-            ffmpegPath = '/opt/ffmpeg';
-        }
-        
-        console.log(`Environment: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
+        // 使用ffmpeg-static包提供的FFmpeg路径
+        const ffmpegPath = ffmpeg;
         console.log(`Using FFmpeg path: ${ffmpegPath}`);
-        console.log(`FFmpeg exists: ${fs.existsSync(ffmpegPath)}`);
-        console.log(`Current working directory: ${process.cwd()}`);
         
-        // 检查FFmpeg是否存在
-        if (!fs.existsSync(ffmpegPath)) {
-            // 尝试其他可能的路径
-            const alternativePaths = [
-                '/opt/ffmpeg', // Vercel系统路径
-                '/usr/bin/ffmpeg', // Linux系统路径
-                path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
-                path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg'),
-                'ffmpeg.exe',
-                'ffmpeg'
-            ];
-            
-            let foundPath = null;
-            for (const altPath of alternativePaths) {
-                if (fs.existsSync(altPath)) {
-                    foundPath = altPath;
-                    break;
-                }
-            }
-            
-            if (!foundPath) {
-                reject(new Error(`FFmpeg not found. Tried paths: ${[ffmpegPath, ...alternativePaths].join(', ')}`));
-                return;
-            }
-            
-            console.log(`Using alternative FFmpeg path: ${foundPath}`);
-            ffmpegPath = foundPath;
-        }
-
         const ffmpegProcess = spawn(ffmpegPath, [
             '-i', videoPath,
             '-i', watermarkPath,
@@ -118,44 +84,34 @@ async function processWatermark(videoPath, watermarkPath, outputPath) {
             '-c:a', 'copy',
             '-y', // 覆盖输出文件
             outputPath
-        ], {
-            stdio: ['pipe', 'pipe', 'pipe']
-        });
+        ]);
+
+        let stderr = '';
         
-        handleFFmpegProcess(ffmpegProcess, outputPath, resolve, reject);
+        ffmpegProcess.stderr.on('data', (data) => {
+            stderr += data.toString();
+            console.log('FFmpeg output:', data.toString());
+        });
+
+        ffmpegProcess.on('close', (code) => {
+            console.log(`FFmpeg process exited with code: ${code}`);
+            if (code === 0) {
+                console.log('FFmpeg processing completed successfully');
+                resolve(outputPath);
+            } else {
+                console.error('FFmpeg stderr:', stderr);
+                reject(new Error(`FFmpeg process failed with code ${code}: ${stderr}`));
+            }
+        });
+
+        ffmpegProcess.on('error', (error) => {
+            console.error('FFmpeg spawn error:', error);
+            reject(new Error(`FFmpeg process error: ${error.message}`));
+        });
     });
 }
 
-// 处理FFmpeg进程的辅助函数
-function handleFFmpegProcess(ffmpegProcess, outputPath, resolve, reject) {
-    let stderr = '';
-    let stdout = '';
-    
-    ffmpegProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-    });
-    
-    ffmpegProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-        console.log('FFmpeg stderr:', data.toString());
-    });
 
-    ffmpegProcess.on('close', (code) => {
-        console.log(`FFmpeg process exited with code: ${code}`);
-        if (code === 0) {
-            console.log('FFmpeg processing completed successfully');
-            resolve(outputPath);
-        } else {
-            console.error('FFmpeg stderr:', stderr);
-            reject(new Error(`FFmpeg process failed with code ${code}: ${stderr}`));
-        }
-    });
-
-    ffmpegProcess.on('error', (error) => {
-        console.error('FFmpeg spawn error:', error);
-        reject(new Error(`FFmpeg process error: ${error.message}`));
-    });
-}
 
 // 清理临时文件
 function cleanupTempFiles(files) {

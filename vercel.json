@@ -5,10 +5,5 @@
       "memory": 3009,
       "maxDuration": 300
     }
-  },
-  "build": {
-    "env": {
-      "FFMPEG_PATH": "/opt/ffmpeg"
-    }
   }
 }
