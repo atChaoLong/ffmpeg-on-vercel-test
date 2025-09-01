@@ -5,13 +5,13 @@ import Image from 'next/image';
 
 // 水印类型配置
 const WATERMARK_TYPES = [
-    { value: 'kling', label: 'Kling AI', preview: 'https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/images/watermark/kling.png' },
-    { value: 'runway', label: 'Runway', preview: 'https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/images/watermark/runway.png' },
-    { value: 'pika', label: 'Pika', preview: 'https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/images/watermark/pika.png' },
-    { value: 'vidu', label: 'Vidu', preview: 'https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/images/watermark/vidu.png' },
-    { value: 'veo', label: 'Veo', preview: 'https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/images/watermark/veo.png' },
-    { value: 'luma', label: 'Luma', preview: 'https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/images/watermark/luma.png' },
-    { value: 'stability', label: 'Stability AI', preview: 'https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/images/watermark/stability.png' }
+    { value: 'kling', label: 'Kling AI', preview: '/image/watermark/kling.png' },
+    { value: 'runway', label: 'Runway', preview: '/image/watermark/runway.png' },
+    { value: 'pika', label: 'Pika', preview: '/image/watermark/pika.png' },
+    { value: 'vidu', label: 'Vidu', preview: '/image/watermark/vidu.png' },
+    { value: 'veo', label: 'Veo', preview: '/image/watermark/veo.png' },
+    { value: 'luma', label: 'Luma', preview: '/image/watermark/luma.png' },
+    { value: 'stability', label: 'Stability AI', preview: '/image/watermark/stability.png' }
 ];
 
 export default function VideoWatermarkProcessor() {
