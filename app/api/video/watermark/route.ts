@@ -93,39 +93,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           return;
         }
 
-        // 在Vercel环境中使用正确的FFmpeg路径
-        const ffmpegPath = process.platform === 'win32' 
-          ? "./node_modules/ffmpeg-static/ffmpeg.exe"
-          : "./node_modules/ffmpeg-static/ffmpeg";
-        
-        console.log("Using FFmpeg path:", ffmpegPath);
-        console.log("Platform:", process.platform);
-        console.log("FFmpeg args:", ffmpegArgs);
-        
-        const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs, { 
-          stdio: 'pipe',
-          shell: false, // 在Vercel中通常不需要shell
-          env: { ...process.env, PATH: process.env.PATH }
-        });
+        const process = spawn("./node_modules/ffmpeg-static/ffmpeg", ffmpegArgs, { stdio: 'pipe'});
 
         let stderr = "";
         let isClosed = false;
         
-        ffmpegProcess.stdout.on("data", (data: Buffer) => {
+        process.stdout.on("data", (data: Buffer) => {
           if (!isClosed) {
             try {
               controller.enqueue(new Uint8Array(data));
-            } catch {
+            } catch (error) {
               // Controller might be closed, ignore the error
             }
           }
         });
         
-        ffmpegProcess.stderr.on("data", (data: Buffer) => {
+        process.stderr.on("data", (data: Buffer) => {
           stderr += data.toString();
         });
 
-        ffmpegProcess.on("close", (code: number | null) => {
+        process.on("close", (code: number | null) => {
           if (!isClosed) {
             isClosed = true;
             if (code === 0) {
@@ -133,7 +120,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 if (controller.desiredSize !== null) {
                   controller.close();
                 }
-              } catch {
+              } catch (error) {
                 // Controller already closed by client
               }
             } else {
@@ -141,21 +128,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 if (controller.desiredSize !== null) {
                   controller.error(new Error(`FFmpeg failed with code ${code}: ${stderr}`));
                 }
-              } catch {
+              } catch (error) {
                 // Controller already closed by client
               }
             }
           }
         });
 
-        ffmpegProcess.on("error", (error: Error) => {
+        process.on("error", (error: Error) => {
           if (!isClosed) {
             isClosed = true;
             try {
               if (controller.desiredSize !== null) {
                 controller.error(error);
               }
-            } catch {
+            } catch (error) {
               // Controller already closed by client
             }
           }
@@ -166,7 +153,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Set appropriate headers for streaming
     const headers = new Headers();
     headers.set("Content-Type", "video/mp4");
-    headers.set("Content-Disposition", `attachment; filename="watermarked_${watermark}.mp4"`);
 
     return new NextResponse(readableStream, {
       status: 200,
@@ -174,9 +160,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     console.error("Video watermarking error:", error);
-    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
-    console.error("Platform:", process.platform);
-    console.error("FFmpeg path:", ffmpeg);
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error occurred";
@@ -185,8 +168,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       {
         error: "Video watermarking failed",
         details: errorMessage,
-        platform: process.platform,
-        timestamp: new Date().toISOString(),
       },
       { status: 500 }
     );
