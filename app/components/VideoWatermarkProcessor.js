@@ -298,7 +298,7 @@ export default function VideoWatermarkProcessor() {
                      <ul className="text-xs text-yellow-700 space-y-1">
                          <li>• Vercel免费版函数执行时间限制：10秒</li>
                          <li>• 视频处理通常需要几分钟，可能超时</li>
-                         <li>• 如果处理卡住，请点击"重置状态"按钮</li>
+                         <li>• 如果处理卡住，请点击&ldquo;重置状态&rdquo;按钮</li>
                          <li>• 建议使用小视频文件进行测试</li>
                      </ul>
                  </div>
