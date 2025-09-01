@@ -6,6 +6,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 300;
 
+// 添加运行时配置
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface WatermarkPosition {
   [key: string]: string;
 }
@@ -66,6 +70,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const videoCodec = format === "webm" ? "libvpx-vp9" : "libx264";
     const audioCodec = format === "webm" ? "libopus" : "aac";
     const fastStart = format === "webm" ? [] : ["-movflags", "+faststart"];
+    
+    // MP4 特定的编码参数
+    const mp4SpecificArgs = format === "mp4" ? [
+      "-pix_fmt", "yuv420p", // 确保兼容性
+      "-profile:v", "baseline", // 使用 baseline 配置文件，兼容性更好
+      "-level", "3.0"         // 降低 H.264 级别
+    ] : [];
 
     // FFmpeg 参数用于添加水印
     const ffmpegArgs = [
@@ -79,8 +90,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       "-c:a", audioCodec,        // 音频编码器
       "-preset", "medium",       // 编码预设
       "-crf", "23",              // 质量设置
+      ...mp4SpecificArgs,        // MP4 特定参数
       ...fastStart,              // 优化网络播放（仅MP4）
       "-f", format,              // 输出格式
+      "-y",                      // 覆盖输出文件
       "pipe:1",                  // 输出到标准输出
     ];
 
@@ -97,6 +110,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         let stderr = "";
         let isClosed = false;
         
+        // 添加调试信息
+        console.log("FFmpeg watermark command:", "./node_modules/ffmpeg-static/ffmpeg", ffmpegArgs.join(" "));
+        
         process.stdout.on("data", (data: Buffer) => {
           if (!isClosed) {
             try {
@@ -109,11 +125,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         
         process.stderr.on("data", (data: Buffer) => {
           stderr += data.toString();
+          console.log("FFmpeg watermark stderr:", data.toString());
         });
 
         process.on("close", (code: number | null) => {
           if (!isClosed) {
             isClosed = true;
+            console.log(`FFmpeg watermark process closed with code: ${code}`);
             if (code === 0) {
               try {
                 if (controller.desiredSize !== null) {
@@ -123,6 +141,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 // Controller 已被客户端关闭
               }
             } else {
+              console.error(`FFmpeg watermark failed with code ${code}:`, stderr);
               try {
                 if (controller.desiredSize !== null) {
                   controller.error(new Error(`FFmpeg failed with code ${code}: ${stderr}`));

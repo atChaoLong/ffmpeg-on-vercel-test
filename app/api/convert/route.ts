@@ -6,6 +6,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 300;
 
+// 添加运行时配置
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface QualitySettings {
   [key: string]: string[];
 }
@@ -47,6 +51,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const videoCodec = format === "webm" ? "libvpx-vp9" : "libx264";
     const audioCodec = format === "webm" ? "libopus" : "aac";
     const fastStart = format === "webm" ? [] : ["-movflags", "+faststart"];
+    
+    // MP4 特定的编码参数
+    const mp4SpecificArgs = format === "mp4" ? [
+      "-pix_fmt", "yuv420p", // 确保兼容性
+      "-profile:v", "baseline", // 使用 baseline 配置文件，兼容性更好
+      "-level", "3.0"         // 降低 H.264 级别
+    ] : [];
 
     // FFmpeg arguments for conversion
     const ffmpegArgs = [
@@ -57,9 +68,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       "-c:a",
       audioCodec,
       ...qualitySettings[quality],
+      ...mp4SpecificArgs,
       ...fastStart,
       "-f",
       format,
+      "-y", // Overwrite output files
       "pipe:1", // pipe to stdout
     ];
 
@@ -76,6 +89,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         let stderr = "";
         let isClosed = false;
         
+        // 添加调试信息
+        console.log("FFmpeg command:", "./node_modules/ffmpeg-static/ffmpeg", ffmpegArgs.join(" "));
+        
         process.stdout.on("data", (data: Buffer) => {
           if (!isClosed) {
             try {
@@ -88,11 +104,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         
         process.stderr.on("data", (data: Buffer) => {
           stderr += data.toString();
+          console.log("FFmpeg stderr:", data.toString());
         });
 
         process.on("close", (code: number | null) => {
           if (!isClosed) {
             isClosed = true;
+            console.log(`FFmpeg process closed with code: ${code}`);
             if (code === 0) {
               try {
                 if (controller.desiredSize !== null) {
@@ -102,6 +120,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 // Controller already closed by client
               }
             } else {
+              console.error(`FFmpeg failed with code ${code}:`, stderr);
               try {
                 if (controller.desiredSize !== null) {
                   controller.error(new Error(`FFmpeg failed with code ${code}: ${stderr}`));
