@@ -22,12 +22,8 @@ export default function VideoUploadTest() {
             return;
         }
 
-        // 检查文件大小（Vercel免费版限制4.5MB请求体）
-        const maxSize = 4 * 1024 * 1024; // 4MB (留0.5MB缓冲)
-        if (file.size > maxSize) {
-            setError(`文件太大！Vercel免费版限制4.5MB请求体，当前文件${(file.size / 1024 / 1024).toFixed(1)}MB`);
-            return;
-        }
+        // 移除文件大小限制，因为现在直接上传到R2
+        // 不再受Vercel 4.5MB请求体限制
 
         setUploading(true);
         setError(null);
@@ -35,19 +31,35 @@ export default function VideoUploadTest() {
         setUploadProgress(0);
 
         try {
-            const formData = new FormData();
-            formData.append('file', file);
+            // 步骤1：获取预签名URL
+            setUploadProgress(10);
+            
+            const presignedResponse = await fetch('/api/video/presigned-url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    fileName: file.name,
+                    fileType: file.type
+                }),
+            });
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+            if (!presignedResponse.ok) {
+                throw new Error('获取上传链接失败');
+            }
 
-            // 创建 XMLHttpRequest 来监控上传进度
+            const { presignedUrl, key, publicUrl } = await presignedResponse.json();
+
+            // 步骤2：直接上传到R2
+            setUploadProgress(20);
+
             const xhr = new XMLHttpRequest();
             
             // 监听上传进度
             xhr.upload.addEventListener('progress', (event) => {
                 if (event.lengthComputable) {
-                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    const percentComplete = Math.round(20 + (event.loaded / event.total) * 70); // 20-90%
                     setUploadProgress(percentComplete);
                 }
             });
@@ -55,48 +67,58 @@ export default function VideoUploadTest() {
             // 创建 Promise 来处理 XMLHttpRequest
             const uploadPromise = new Promise((resolve, reject) => {
                 xhr.onload = () => {
-                    clearTimeout(timeoutId);
                     if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            const data = JSON.parse(xhr.responseText);
-                            resolve(data);
-                        } catch (e) {
-                            reject(new Error('响应解析失败'));
-                        }
+                        resolve({ key, publicUrl });
                     } else {
-                        try {
-                            const errorData = JSON.parse(xhr.responseText);
-                            reject(new Error(errorData.error || `上传失败 (${xhr.status})`));
-                        } catch (e) {
-                            reject(new Error(`上传失败 (${xhr.status})`));
-                        }
+                        reject(new Error(`上传失败 (${xhr.status})`));
                     }
                 };
 
                 xhr.onerror = () => {
-                    clearTimeout(timeoutId);
                     reject(new Error('网络错误，请检查连接'));
                 };
 
                 xhr.ontimeout = () => {
-                    clearTimeout(timeoutId);
-                    reject(new Error('上传超时，请检查网络连接或尝试较小的文件'));
+                    reject(new Error('上传超时，请检查网络连接'));
                 };
 
                 xhr.onabort = () => {
-                    clearTimeout(timeoutId);
                     reject(new Error('上传被取消'));
                 };
             });
 
-            // 开始上传
-            xhr.open('POST', '/api/video/upload');
-            xhr.timeout = 30000;
-            xhr.send(formData);
+            // 开始上传到R2
+            xhr.open('PUT', presignedUrl);
+            xhr.setRequestHeader('Content-Type', file.type);
+            xhr.timeout = 300000; // 5分钟超时
+            xhr.send(file);
 
-            const data = await uploadPromise;
-            setResult(data);
+            const uploadResult = await uploadPromise;
+
+            // 步骤3：保存到数据库
+            setUploadProgress(90);
+
+            const saveResponse = await fetch('/api/video/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    videoUrl: uploadResult.publicUrl,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type
+                }),
+            });
+
+            if (!saveResponse.ok) {
+                throw new Error('保存文件信息失败');
+            }
+
+            const saveResult = await saveResponse.json();
+            
             setUploadProgress(100);
+            setResult(saveResult);
         } catch (err) {
             setError(err.message || '上传失败，请重试');
             setUploadProgress(0);
@@ -130,9 +152,7 @@ export default function VideoUploadTest() {
                             </p>
                             <p className="text-xs text-gray-500">
                                 文件大小: {(file.size / 1024 / 1024).toFixed(1)} MB
-                                {file.size > 4 * 1024 * 1024 && (
-                                    <span className="text-red-500 ml-2">⚠️ 超过4MB限制</span>
-                                )}
+                                <span className="text-green-500 ml-2">✅ 无大小限制</span>
                             </p>
                         </div>
                     )}
@@ -210,9 +230,9 @@ export default function VideoUploadTest() {
                             ℹ️ 上传说明
                         </h3>
                         <ul className="text-xs text-blue-700 space-y-1">
-                            <li>• 文件大小限制：最大4MB（Vercel免费版4.5MB请求体限制）</li>
+                            <li>• 文件大小限制：无限制（直接上传到R2）</li>
                             <li>• 支持格式：MP4, AVI, MOV等常见视频格式</li>
-                            <li>• 上传超时：60秒（Vercel免费版最高配置）</li>
+                            <li>• 上传超时：5分钟</li>
                             <li>• 存储位置：Cloudflare R2</li>
                         </ul>
                     </div>
@@ -223,9 +243,9 @@ export default function VideoUploadTest() {
                             接口信息
                         </h3>
                         <ul className="text-xs text-gray-600 space-y-1">
-                            <li>• 接口地址: POST /api/video/upload</li>
-                            <li>• 参数名: file (FormData)</li>
-                            <li>• 存储: Cloudflare R2</li>
+                            <li>• 步骤1: POST /api/video/presigned-url (获取上传链接)</li>
+                            <li>• 步骤2: PUT 直接上传到 R2 (绕过Vercel限制)</li>
+                            <li>• 步骤3: POST /api/video/save (保存到数据库)</li>
                             <li>• 返回: {`{ url: string, id: number }`}</li>
                         </ul>
                     </div>
