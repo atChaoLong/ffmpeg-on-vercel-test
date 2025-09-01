@@ -7,6 +7,7 @@ export default function WatermarkTestPage() {
   const [position, setPosition] = useState('bottom-right');
   const [opacity, setOpacity] = useState('0.8');
   const [scale, setScale] = useState('0.1');
+  const [format, setFormat] = useState('mp4');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -31,6 +32,12 @@ export default function WatermarkTestPage() {
     { value: 'center', label: '居中' },
   ];
 
+  // 格式选项
+  const formatOptions = [
+    { value: 'mp4', label: 'MP4 (H.264 + AAC)' },
+    { value: 'webm', label: 'WebM (VP9 + Opus)' },
+  ];
+
   const handleAddWatermark = async () => {
     setIsProcessing(true);
     setError(null);
@@ -42,6 +49,7 @@ export default function WatermarkTestPage() {
         position,
         opacity,
         scale,
+        format,
       });
 
       const response = await fetch(`/api/video/watermark?${params}`);
@@ -68,7 +76,7 @@ export default function WatermarkTestPage() {
     if (downloadUrl) {
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `watermarked_video.mp4`;
+      a.download = `watermarked_video.${format}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -166,6 +174,25 @@ export default function WatermarkTestPage() {
                 </div>
               </div>
 
+              {/* 格式选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  输出格式
+                </label>
+                <select
+                  value={format}
+                  onChange={(e) => setFormat(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isProcessing}
+                >
+                  {formatOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* 处理按钮 */}
               <div className="text-center">
                 <button
@@ -213,7 +240,7 @@ export default function WatermarkTestPage() {
                       <div className="ml-3">
                         <h3 className="text-sm font-medium text-green-800">处理成功</h3>
                         <div className="mt-1 text-sm text-green-700">
-                          视频水印已成功添加
+                          视频水印已成功添加，格式: {format.toUpperCase()}
                         </div>
                       </div>
                     </div>
@@ -266,7 +293,7 @@ export default function WatermarkTestPage() {
                   <li>• 当前使用示例视频文件: sample.mp4</li>
                   <li>• 支持多种 AI 平台水印选择</li>
                   <li>• 可调整水印位置、透明度和大小</li>
-                  <li>• 输出格式为 MP4，兼容性良好</li>
+                  <li>• 支持 MP4 和 WebM 两种输出格式</li>
                   <li>• 处理完成后可以下载带水印的视频</li>
                   <li>• 水印会保持原始比例缩放</li>
                 </ul>
@@ -279,8 +306,9 @@ export default function WatermarkTestPage() {
                   <li>• 使用 FFmpeg filter_complex 进行水印合成</li>
                   <li>• 支持 RGBA 格式水印图片的透明度处理</li>
                   <li>• 流式处理，避免大文件内存占用</li>
-                  <li>• H.264 视频编码 + AAC 音频编码</li>
-                  <li>• 优化网络播放的 faststart 标志</li>
+                  <li>• MP4: H.264 视频编码 + AAC 音频编码</li>
+                  <li>• WebM: VP9 视频编码 + Opus 音频编码</li>
+                  <li>• MP4 格式支持 faststart 优化网络播放</li>
                 </ul>
               </div>
             </div>

@@ -17,6 +17,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const position = searchParams.get("position") || "bottom-right";
   const opacity = searchParams.get("opacity") || "0.8";
   const scale = searchParams.get("scale") || "0.1";
+  const format = searchParams.get("format") || "mp4";
 
   if (!inputFile) {
     return NextResponse.json(
@@ -61,6 +62,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const watermarkPosition = positionSettings[position] || positionSettings["bottom-right"];
 
+    // 根据格式设置编码器和参数
+    const videoCodec = format === "webm" ? "libvpx-vp9" : "libx264";
+    const audioCodec = format === "webm" ? "libopus" : "aac";
+    const fastStart = format === "webm" ? [] : ["-movflags", "+faststart"];
+
     // FFmpeg 参数用于添加水印
     const ffmpegArgs = [
       "-i", inputPath,           // 输入视频文件
@@ -69,12 +75,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       `[1:v]scale=iw*${scale}:ih*${scale},format=rgba,colorchannelmixer=aa=${opacity}[watermark];[0:v][watermark]overlay=${watermarkPosition}[v]`,
       "-map", "[v]",             // 映射处理后的视频流
       "-map", "0:a?",            // 映射音频流（如果存在）
-      "-c:v", "libx264",         // 视频编码器
-      "-c:a", "aac",             // 音频编码器
+      "-c:v", videoCodec,        // 视频编码器
+      "-c:a", audioCodec,        // 音频编码器
       "-preset", "medium",       // 编码预设
       "-crf", "23",              // 质量设置
-      "-movflags", "+faststart", // 优化网络播放
-      "-f", "mp4",               // 输出格式
+      ...fastStart,              // 优化网络播放（仅MP4）
+      "-f", format,              // 输出格式
       "pipe:1",                  // 输出到标准输出
     ];
 
@@ -145,7 +151,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // 设置流式传输的适当头部
     const headers = new Headers();
-    headers.set("Content-Type", "video/mp4");
+    headers.set("Content-Type", `video/${format}`);
 
     return new NextResponse(readableStream, {
       status: 200,
