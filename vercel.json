@@ -4,6 +4,10 @@
     "app/api/video/watermark/route.js": {
       "memory": 2048,
       "maxDuration": 300
+    },
+    "api/**/*.{js,ts}": {
+      "runtime": "nodejs20.x",
+      "maxDuration": 300
     }
   }
 }
