@@ -88,7 +88,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           return;
         }
 
-        const process = spawn("./node_modules/ffmpeg-static/ffmpeg", ffmpegArgs, { stdio: 'pipe'});
+        const process = spawn("./node_modules/ffmpeg-static/ffmpeg.exe", ffmpegArgs, { stdio: 'pipe'});
 
         let stderr = "";
         let isClosed = false;
