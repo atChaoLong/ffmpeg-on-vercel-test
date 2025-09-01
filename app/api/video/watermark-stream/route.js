@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 // R2客户端配置
 const R2 = new S3Client({
@@ -144,7 +144,7 @@ export async function POST(request) {
 
                 console.log('Starting FFmpeg process with args:', ffmpegArgs);
 
-                const process = spawn(ffmpeg, ffmpegArgs, { stdio: 'pipe' });
+                const process = spawn(ffmpegPath, ffmpegArgs, { stdio: 'pipe' });
 
                 let stderr = "";
 
