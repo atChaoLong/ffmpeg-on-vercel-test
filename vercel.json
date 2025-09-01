@@ -3,20 +3,23 @@
   "functions": {
     "app/api/video/watermark/route.js": {
       "memory": 2048,
-      "maxDuration": 300
+      "maxDuration": 60
     },
     "app/api/video/watermark-stream/route.js": {
       "memory": 2048,
-      "maxDuration": 300
+      "maxDuration": 60
     },
     "app/api/video/upload/route.js": {
-      "maxDuration": 300
+      "memory": 2048,
+      "maxDuration": 60
     },
     "app/api/videos/route.js": {
-      "maxDuration": 300
+      "memory": 2048,
+      "maxDuration": 60
     },
     "app/api/video/reset-status/route.js": {
-      "maxDuration": 300
+      "memory": 2048,
+      "maxDuration": 60
     }
   }
 }

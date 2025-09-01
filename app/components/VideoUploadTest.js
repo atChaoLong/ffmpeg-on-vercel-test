@@ -22,10 +22,10 @@ export default function VideoUploadTest() {
             return;
         }
 
-        // 检查文件大小（Vercel免费版限制50MB）
-        const maxSize = 50 * 1024 * 1024; // 50MB
+        // 检查文件大小（Vercel免费版限制4.5MB请求体）
+        const maxSize = 4 * 1024 * 1024; // 4MB (留0.5MB缓冲)
         if (file.size > maxSize) {
-            setError(`文件太大！最大支持50MB，当前文件${(file.size / 1024 / 1024).toFixed(1)}MB`);
+            setError(`文件太大！Vercel免费版限制4.5MB请求体，当前文件${(file.size / 1024 / 1024).toFixed(1)}MB`);
             return;
         }
 
@@ -130,8 +130,8 @@ export default function VideoUploadTest() {
                             </p>
                             <p className="text-xs text-gray-500">
                                 文件大小: {(file.size / 1024 / 1024).toFixed(1)} MB
-                                {file.size > 50 * 1024 * 1024 && (
-                                    <span className="text-red-500 ml-2">⚠️ 超过50MB限制</span>
+                                {file.size > 4 * 1024 * 1024 && (
+                                    <span className="text-red-500 ml-2">⚠️ 超过4MB限制</span>
                                 )}
                             </p>
                         </div>
@@ -210,9 +210,9 @@ export default function VideoUploadTest() {
                             ℹ️ 上传说明
                         </h3>
                         <ul className="text-xs text-blue-700 space-y-1">
-                            <li>• 文件大小限制：最大50MB</li>
+                            <li>• 文件大小限制：最大4MB（Vercel免费版4.5MB请求体限制）</li>
                             <li>• 支持格式：MP4, AVI, MOV等常见视频格式</li>
-                            <li>• 上传超时：30秒</li>
+                            <li>• 上传超时：60秒（Vercel免费版最高配置）</li>
                             <li>• 存储位置：Cloudflare R2</li>
                         </ul>
                     </div>
