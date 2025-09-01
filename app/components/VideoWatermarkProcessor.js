@@ -22,6 +22,8 @@ export default function VideoWatermarkProcessor() {
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [progress, setProgress] = useState(0);
+    const [progressText, setProgressText] = useState('');
 
     // 获取视频列表
     const fetchVideos = async () => {
@@ -48,6 +50,8 @@ export default function VideoWatermarkProcessor() {
         setProcessing(true);
         setError(null);
         setResult(null);
+        setProgress(0);
+        setProgressText('正在启动处理...');
 
         try {
             const response = await fetch('/api/video/watermark', {
@@ -67,12 +71,17 @@ export default function VideoWatermarkProcessor() {
                 throw new Error(data.error || '处理失败');
             }
 
+            setProgress(10);
+            setProgressText('处理已启动，正在下载文件...');
+
             // 开始轮询状态
             pollProcessingStatus(selectedVideo.id);
 
         } catch (err) {
             setError(err.message);
             setProcessing(false);
+            setProgress(0);
+            setProgressText('');
         }
     };
 
@@ -83,18 +92,42 @@ export default function VideoWatermarkProcessor() {
             const data = await response.json();
 
             if (data.status === 'processing') {
+                // 模拟进度更新
+                const currentProgress = Math.min(progress + 5, 90);
+                setProgress(currentProgress);
+                
+                if (currentProgress < 30) {
+                    setProgressText('正在下载视频文件...');
+                } else if (currentProgress < 60) {
+                    setProgressText('正在下载水印图片...');
+                } else if (currentProgress < 90) {
+                    setProgressText('正在使用FFmpeg处理视频...');
+                } else {
+                    setProgressText('正在上传处理后的视频...');
+                }
+                
                 // 继续轮询
                 setTimeout(() => pollProcessingStatus(videoId), 2000);
             } else if (data.status === 'completed') {
+                setProgress(100);
+                setProgressText('处理完成！');
                 setResult(data);
-                setProcessing(false);
+                setTimeout(() => {
+                    setProcessing(false);
+                    setProgress(0);
+                    setProgressText('');
+                }, 1000);
             } else if (data.status === 'failed') {
                 setError(data.error_message || '处理失败');
                 setProcessing(false);
+                setProgress(0);
+                setProgressText('');
             }
         } catch (err) {
             setError('状态查询失败');
             setProcessing(false);
+            setProgress(0);
+            setProgressText('');
         }
     };
 
@@ -117,6 +150,8 @@ export default function VideoWatermarkProcessor() {
                 setProcessing(false);
                 setError(null);
                 setResult(null);
+                setProgress(0);
+                setProgressText('');
                 fetchVideos(); // 刷新视频列表
                 alert('状态已重置');
             } else {
@@ -229,20 +264,77 @@ export default function VideoWatermarkProcessor() {
                     </select>
                     
                                          {/* 水印预览 */}
-                     <div className="mt-2 p-2 bg-gray-50 rounded">
+                     <div className="mt-2 p-3 bg-gray-50 rounded">
                          <p className="text-sm text-gray-600 mb-2">水印预览:</p>
-                         <Image
-                             src={WATERMARK_TYPES.find(t => t.value === watermarkType)?.preview || ''}
-                             alt="水印预览"
-                             width={80}
-                             height={80}
-                             className="object-contain border border-gray-300 rounded"
-                         />
+                         <div className="flex items-center gap-3">
+                             <div className="relative">
+                                 <Image
+                                     src={WATERMARK_TYPES.find(t => t.value === watermarkType)?.preview || ''}
+                                     alt="水印预览"
+                                     width={120}
+                                     height={120}
+                                     className="object-contain border border-gray-300 rounded bg-white p-2"
+                                     onError={(e) => {
+                                         e.target.style.display = 'none';
+                                         e.target.nextSibling.style.display = 'block';
+                                     }}
+                                 />
+                                 <div 
+                                     className="hidden w-[120px] h-[120px] border border-gray-300 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-500"
+                                 >
+                                     图片加载失败
+                                 </div>
+                             </div>
+                             <div className="flex-1">
+                                 <p className="text-sm font-medium text-gray-800">
+                                     {WATERMARK_TYPES.find(t => t.value === watermarkType)?.label}
+                                 </p>
+                                 <p className="text-xs text-gray-500 mt-1">
+                                     水印将添加到视频右下角
+                                 </p>
+                                 <a 
+                                     href={WATERMARK_TYPES.find(t => t.value === watermarkType)?.preview}
+                                     target="_blank"
+                                     rel="noopener noreferrer"
+                                     className="text-xs text-blue-600 hover:text-blue-800 mt-2 inline-block"
+                                 >
+                                     查看原图 →
+                                 </a>
+                             </div>
+                         </div>
+                         
+                         {/* 效果预览 */}
+                         {selectedVideo?.video_url && (
+                             <div className="mt-3">
+                                 <p className="text-sm text-gray-600 mb-2">效果预览:</p>
+                                 <div className="relative w-full h-32 bg-black rounded overflow-hidden">
+                                     <video
+                                         className="w-full h-full object-cover"
+                                         src={selectedVideo.video_url}
+                                         muted
+                                         loop
+                                         autoPlay
+                                     />
+                                     <div className="absolute bottom-2 right-2">
+                                         <Image
+                                             src={WATERMARK_TYPES.find(t => t.value === watermarkType)?.preview || ''}
+                                             alt="水印效果"
+                                             width={40}
+                                             height={40}
+                                             className="object-contain opacity-80"
+                                         />
+                                     </div>
+                                 </div>
+                                 <p className="text-xs text-gray-500 mt-1 text-center">
+                                     水印将显示在视频右下角（如预览所示）
+                                 </p>
+                             </div>
+                         )}
                      </div>
                 </div>
 
-                {/* 处理按钮 */}
-                                 <button
+                                 {/* 处理按钮 */}
+                 <button
                      onClick={handleWatermarkProcessing}
                      disabled={!selectedVideo || processing || selectedVideo?.status === 'processing'}
                      className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
@@ -251,6 +343,22 @@ export default function VideoWatermarkProcessor() {
                       selectedVideo?.status === 'processing' ? '正在处理中...' :
                       selectedVideo?.watermark_video_url ? '重新添加水印' : '开始添加水印'}
                  </button>
+
+                 {/* 进度条 */}
+                 {processing && (
+                     <div className="mt-4">
+                         <div className="flex justify-between text-sm text-gray-600 mb-1">
+                             <span>{progressText}</span>
+                             <span>{progress}%</span>
+                         </div>
+                         <div className="w-full bg-gray-200 rounded-full h-2">
+                             <div 
+                                 className="bg-green-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                 style={{ width: `${progress}%` }}
+                             ></div>
+                         </div>
+                     </div>
+                 )}
 
                 {/* 错误信息 */}
                 {error && (
@@ -291,15 +399,15 @@ export default function VideoWatermarkProcessor() {
                 )}
 
                                  {/* 重要提示 */}
-                 <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                     <h3 className="text-sm font-medium text-yellow-800 mb-2">
-                         ⚠️ 重要提示
+                 <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                     <h3 className="text-sm font-medium text-blue-800 mb-2">
+                         ℹ️ 处理说明
                      </h3>
-                     <ul className="text-xs text-yellow-700 space-y-1">
-                         <li>• Vercel免费版函数执行时间限制：10秒</li>
-                         <li>• 视频处理通常需要几分钟，可能超时</li>
+                     <ul className="text-xs text-blue-700 space-y-1">
+                         <li>• 处理时间：通常需要1-3分钟</li>
+                         <li>• 进度条会显示当前处理状态</li>
                          <li>• 如果处理卡住，请点击&ldquo;重置状态&rdquo;按钮</li>
-                         <li>• 建议使用小视频文件进行测试</li>
+                         <li>• 建议使用较小的视频文件进行测试</li>
                      </ul>
                  </div>
 
