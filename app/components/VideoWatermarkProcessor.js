@@ -98,6 +98,35 @@ export default function VideoWatermarkProcessor() {
         }
     };
 
+    // 重置处理状态
+    const resetProcessingStatus = async () => {
+        if (!selectedVideo) return;
+
+        try {
+            const response = await fetch('/api/video/reset-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    videoId: selectedVideo.id
+                }),
+            });
+
+            if (response.ok) {
+                setProcessing(false);
+                setError(null);
+                setResult(null);
+                fetchVideos(); // 刷新视频列表
+                alert('状态已重置');
+            } else {
+                alert('重置失败');
+            }
+        } catch (err) {
+            alert('重置失败');
+        }
+    };
+
     // 组件加载时获取视频列表
     useEffect(() => {
         fetchVideos();
@@ -118,12 +147,22 @@ export default function VideoWatermarkProcessor() {
                      <h2 className="text-xl font-bold text-gray-900">
                          视频水印处理
                      </h2>
-                     <button
-                         onClick={fetchVideos}
-                         className="text-sm text-blue-600 hover:text-blue-800"
-                     >
-                         刷新列表
-                     </button>
+                     <div className="flex gap-2">
+                         <button
+                             onClick={fetchVideos}
+                             className="text-sm text-blue-600 hover:text-blue-800"
+                         >
+                             刷新列表
+                         </button>
+                         {selectedVideo?.status === 'processing' && (
+                             <button
+                                 onClick={resetProcessingStatus}
+                                 className="text-sm text-red-600 hover:text-red-800"
+                             >
+                                 重置状态
+                             </button>
+                         )}
+                     </div>
                  </div>
 
                 {/* 视频选择 */}
@@ -251,18 +290,31 @@ export default function VideoWatermarkProcessor() {
                     </div>
                 )}
 
-                {/* 接口信息 */}
-                <div className="mt-6 p-4 bg-gray-50 rounded-md">
-                    <h3 className="text-sm font-medium text-gray-800 mb-2">
-                        接口信息
-                    </h3>
-                    <ul className="text-xs text-gray-600 space-y-1">
-                        <li>• 接口地址: POST /api/video/watermark</li>
-                        <li>• 参数: videoId, watermarkType</li>
-                        <li>• 处理: 异步FFmpeg处理</li>
-                        <li>• 状态查询: GET /api/video/watermark?videoId=xxx</li>
-                    </ul>
-                </div>
+                                 {/* 重要提示 */}
+                 <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                     <h3 className="text-sm font-medium text-yellow-800 mb-2">
+                         ⚠️ 重要提示
+                     </h3>
+                     <ul className="text-xs text-yellow-700 space-y-1">
+                         <li>• Vercel免费版函数执行时间限制：10秒</li>
+                         <li>• 视频处理通常需要几分钟，可能超时</li>
+                         <li>• 如果处理卡住，请点击"重置状态"按钮</li>
+                         <li>• 建议使用小视频文件进行测试</li>
+                     </ul>
+                 </div>
+
+                 {/* 接口信息 */}
+                 <div className="mt-4 p-4 bg-gray-50 rounded-md">
+                     <h3 className="text-sm font-medium text-gray-800 mb-2">
+                         接口信息
+                     </h3>
+                     <ul className="text-xs text-gray-600 space-y-1">
+                         <li>• 接口地址: POST /api/video/watermark</li>
+                         <li>• 参数: videoId, watermarkType</li>
+                         <li>• 处理: 异步FFmpeg处理</li>
+                         <li>• 状态查询: GET /api/video/watermark?videoId=xxx</li>
+                     </ul>
+                 </div>
             </div>
         </div>
     );

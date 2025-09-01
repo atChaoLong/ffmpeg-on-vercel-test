@@ -178,7 +178,7 @@ async function processWatermarkAsync(videoId, watermarkType) {
         tempFiles.push(outputPath);
 
         // 5. 上传处理后的视频
-        const r2Key = `watermarked/${uuidv4()}_${videoId}.mp4`;
+        const r2Key = `video/watermarked/${uuidv4()}_${videoId}.mp4`;
         const processedVideoUrl = await uploadToR2(outputPath, r2Key);
 
         // 6. 更新数据库
