@@ -132,6 +132,15 @@ export async function POST(request) {
                     return;
                 }
 
+                // 使用ffmpeg-static包提供的FFmpeg路径
+                let ffmpegPath = ffmpeg;
+                
+                // 在Vercel环境中，ffmpeg-static包会自动提供正确的路径
+                // 不需要手动设置路径，直接使用ffmpeg变量即可
+                console.log(`Using FFmpeg path: ${ffmpegPath}`);
+                
+                console.log(`Using FFmpeg path: ${ffmpegPath}`);
+
                 // FFmpeg参数：添加水印到右下角
                 const ffmpegArgs = [
                     '-i', videoPath, // 输入视频文件
