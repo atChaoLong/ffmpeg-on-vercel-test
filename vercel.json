@@ -5,7 +5,17 @@
       "memory": 2048,
       "maxDuration": 300
     },
-    "api/**/*.{js,ts}": {
+    "app/api/video/watermark-stream/route.js": {
+      "memory": 2048,
+      "maxDuration": 300
+    },
+    "app/api/video/upload/route.js": {
+      "maxDuration": 300
+    },
+    "app/api/videos/route.js": {
+      "maxDuration": 300
+    },
+    "app/api/video/reset-status/route.js": {
       "maxDuration": 300
     }
   }

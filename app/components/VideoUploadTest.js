@@ -7,6 +7,7 @@ export default function VideoUploadTest() {
     const [uploading, setUploading] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
@@ -31,6 +32,7 @@ export default function VideoUploadTest() {
         setUploading(true);
         setError(null);
         setResult(null);
+        setUploadProgress(0);
 
         try {
             const formData = new FormData();
@@ -39,27 +41,65 @@ export default function VideoUploadTest() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
-            const response = await fetch('/api/video/upload', {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal,
+            // 创建 XMLHttpRequest 来监控上传进度
+            const xhr = new XMLHttpRequest();
+            
+            // 监听上传进度
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    setUploadProgress(percentComplete);
+                }
             });
 
-            clearTimeout(timeoutId);
+            // 创建 Promise 来处理 XMLHttpRequest
+            const uploadPromise = new Promise((resolve, reject) => {
+                xhr.onload = () => {
+                    clearTimeout(timeoutId);
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            resolve(data);
+                        } catch (e) {
+                            reject(new Error('响应解析失败'));
+                        }
+                    } else {
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            reject(new Error(errorData.error || `上传失败 (${xhr.status})`));
+                        } catch (e) {
+                            reject(new Error(`上传失败 (${xhr.status})`));
+                        }
+                    }
+                };
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `上传失败 (${response.status})`);
-            }
+                xhr.onerror = () => {
+                    clearTimeout(timeoutId);
+                    reject(new Error('网络错误，请检查连接'));
+                };
 
-            const data = await response.json();
+                xhr.ontimeout = () => {
+                    clearTimeout(timeoutId);
+                    reject(new Error('上传超时，请检查网络连接或尝试较小的文件'));
+                };
+
+                xhr.onabort = () => {
+                    clearTimeout(timeoutId);
+                    reject(new Error('上传被取消'));
+                };
+            });
+
+            // 开始上传
+            xhr.open('POST', '/api/video/upload');
+            xhr.timeout = 30000;
+            xhr.send(formData);
+
+            const data = await uploadPromise;
             setResult(data);
+            setUploadProgress(100);
         } catch (err) {
-            if (err.name === 'AbortError') {
-                setError('上传超时，请检查网络连接或尝试较小的文件');
-            } else {
-                setError(err.message || '上传失败，请重试');
-            }
+            setError(err.message || '上传失败，请重试');
+            setUploadProgress(0);
         } finally {
             setUploading(false);
         }
@@ -104,8 +144,24 @@ export default function VideoUploadTest() {
                     disabled={!file || uploading}
                     className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                    {uploading ? '上传中...' : '上传视频'}
+                    {uploading ? `上传中... ${uploadProgress}%` : '上传视频'}
                 </button>
+
+                {/* 上传进度条 */}
+                {uploading && (
+                    <div className="mt-3">
+                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>上传进度</span>
+                            <span>{uploadProgress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                style={{ width: `${uploadProgress}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                )}
 
                 {/* 错误信息 */}
                 {error && (

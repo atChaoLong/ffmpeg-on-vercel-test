@@ -18,6 +18,7 @@ export default function VideoWatermarkProcessor() {
     const [videos, setVideos] = useState([]);
     const [selectedVideo, setSelectedVideo] = useState(null);
     const [watermarkType, setWatermarkType] = useState('kling');
+    const [processingMode, setProcessingMode] = useState('async'); // 'async' 或 'stream'
     const [processing, setProcessing] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
@@ -54,28 +55,65 @@ export default function VideoWatermarkProcessor() {
         setProgressText('正在启动处理...');
 
         try {
-            const response = await fetch('/api/video/watermark', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    videoId: selectedVideo.id,
-                    watermarkType: watermarkType
-                }),
-            });
+            if (processingMode === 'stream') {
+                // 流式处理模式
+                setProgressText('正在处理视频...');
+                
+                const response = await fetch('/api/video/watermark-stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        videoId: selectedVideo.id,
+                        watermarkType: watermarkType
+                    }),
+                });
 
-            const data = await response.json();
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '处理失败');
+                }
 
-            if (!response.ok) {
-                throw new Error(data.error || '处理失败');
+                const data = await response.json();
+                setProgress(100);
+                setProgressText('处理完成！');
+                setResult(data);
+                
+                // 刷新视频列表以获取最新状态
+                await fetchVideos();
+                
+                setTimeout(() => {
+                    setProcessing(false);
+                    setProgress(0);
+                    setProgressText('');
+                }, 1000);
+
+            } else {
+                // 异步处理模式
+                const response = await fetch('/api/video/watermark', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        videoId: selectedVideo.id,
+                        watermarkType: watermarkType
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || '处理失败');
+                }
+
+                setProgress(10);
+                setProgressText('处理已启动，正在下载文件...');
+
+                // 开始轮询状态
+                pollProcessingStatus(selectedVideo.id);
             }
-
-            setProgress(10);
-            setProgressText('处理已启动，正在下载文件...');
-
-            // 开始轮询状态
-            pollProcessingStatus(selectedVideo.id);
 
         } catch (err) {
             setError(err.message);
@@ -246,6 +284,41 @@ export default function VideoWatermarkProcessor() {
                      )}
                 </div>
 
+                {/* 处理模式选择 */}
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        处理模式
+                    </label>
+                    <div className="flex space-x-4">
+                        <label className="flex items-center">
+                            <input
+                                type="radio"
+                                value="async"
+                                checked={processingMode === 'async'}
+                                onChange={(e) => setProcessingMode(e.target.value)}
+                                className="mr-2"
+                            />
+                            <span className="text-sm">异步处理（后台运行）</span>
+                        </label>
+                        <label className="flex items-center">
+                            <input
+                                type="radio"
+                                value="stream"
+                                checked={processingMode === 'stream'}
+                                onChange={(e) => setProcessingMode(e.target.value)}
+                                className="mr-2"
+                            />
+                            <span className="text-sm">流式处理（立即返回）</span>
+                        </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                        {processingMode === 'async' 
+                            ? '后台处理，可以关闭页面，适合大文件' 
+                            : '实时处理，立即获得结果，适合小文件'
+                        }
+                    </p>
+                </div>
+
                 {/* 水印类型选择 */}
                 <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -341,7 +414,8 @@ export default function VideoWatermarkProcessor() {
                  >
                      {processing ? '处理中...' : 
                       selectedVideo?.status === 'processing' ? '正在处理中...' :
-                      selectedVideo?.watermark_video_url ? '重新添加水印' : '开始添加水印'}
+                      selectedVideo?.watermark_video_url ? '重新添加水印' : 
+                      processingMode === 'stream' ? '开始流式处理' : '开始异步处理'}
                  </button>
 
                  {/* 进度条 */}
