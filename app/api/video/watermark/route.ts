@@ -88,12 +88,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           return;
         }
 
-        const process = spawn("./node_modules/ffmpeg-static/ffmpeg.exe", ffmpegArgs, { stdio: 'pipe'});
+        // 在Vercel环境中使用正确的FFmpeg路径
+        const ffmpegPath = process.platform === 'win32' 
+          ? "./node_modules/ffmpeg-static/ffmpeg.exe"
+          : "./node_modules/ffmpeg-static/ffmpeg";
+        
+        console.log("Using FFmpeg path:", ffmpegPath);
+        console.log("Platform:", process.platform);
+        console.log("FFmpeg args:", ffmpegArgs);
+        
+        const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs, { 
+          stdio: 'pipe',
+          shell: false, // 在Vercel中通常不需要shell
+          env: { ...process.env, PATH: process.env.PATH }
+        });
 
         let stderr = "";
         let isClosed = false;
         
-        process.stdout.on("data", (data: Buffer) => {
+        ffmpegProcess.stdout.on("data", (data: Buffer) => {
           if (!isClosed) {
             try {
               controller.enqueue(new Uint8Array(data));
@@ -103,11 +116,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           }
         });
         
-        process.stderr.on("data", (data: Buffer) => {
+        ffmpegProcess.stderr.on("data", (data: Buffer) => {
           stderr += data.toString();
         });
 
-        process.on("close", (code: number | null) => {
+        ffmpegProcess.on("close", (code: number | null) => {
           if (!isClosed) {
             isClosed = true;
             if (code === 0) {
@@ -130,7 +143,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           }
         });
 
-        process.on("error", (error: Error) => {
+        ffmpegProcess.on("error", (error: Error) => {
           if (!isClosed) {
             isClosed = true;
             try {
@@ -156,6 +169,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   } catch (error) {
     console.error("Video watermarking error:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    console.error("Platform:", process.platform);
+    console.error("FFmpeg path:", ffmpeg);
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error occurred";
@@ -164,6 +180,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       {
         error: "Video watermarking failed",
         details: errorMessage,
+        platform: process.platform,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 }
     );
