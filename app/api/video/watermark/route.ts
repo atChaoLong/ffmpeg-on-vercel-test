@@ -70,6 +70,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const watermarkSize = sizeSettings[size] || sizeSettings["small"];
 
     // FFmpeg arguments for watermarking
+    // NOTE: MP4 to stdout requires non-seekable friendly movflags
     const ffmpegArgs = [
       "-i", inputPath,
       "-i", watermarkPath,
@@ -77,7 +78,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       `[1:v]scale=${watermarkSize},format=rgba,colorchannelmixer=aa=${opacity}[watermark];[0:v][watermark]overlay=${watermarkPosition}`,
       "-c:a", "copy",
       "-f", "mp4",
-      "pipe:1" // pipe to stdout
+      "-movflags", "frag_keyframe+empty_moov",
+      "pipe:1" // pipe to stdout (non-seekable)
     ];
 
     // Run FFmpeg watermarking
@@ -89,9 +91,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
 
         // 在Vercel环境中使用正确的FFmpeg路径
-        const ffmpegPath = process.platform === 'win32' 
+        const ffmpegPath = (ffmpeg as unknown as string) || (process.platform === 'win32' 
           ? "./node_modules/ffmpeg-static/ffmpeg.exe"
-          : "./node_modules/ffmpeg-static/ffmpeg";
+          : "./node_modules/ffmpeg-static/ffmpeg");
         
         console.log("Using FFmpeg path:", ffmpegPath);
         console.log("Platform:", process.platform);
@@ -132,6 +134,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 // Controller already closed by client
               }
             } else {
+              // 打印 FFmpeg 的错误输出，便于在 Vercel 日志中排查
+              console.error("FFmpeg exited with code:", code);
+              if (stderr) {
+                console.error("FFmpeg stderr:\n", stderr);
+              }
               try {
                 if (controller.desiredSize !== null) {
                   controller.error(new Error(`FFmpeg failed with code ${code}: ${stderr}`));
