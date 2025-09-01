@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 // 水印类型配置
 const WATERMARK_TYPES = [
@@ -188,15 +189,17 @@ export default function VideoWatermarkProcessor() {
                         ))}
                     </select>
                     
-                    {/* 水印预览 */}
-                    <div className="mt-2 p-2 bg-gray-50 rounded">
-                        <p className="text-sm text-gray-600 mb-2">水印预览:</p>
-                        <img
-                            src={WATERMARK_TYPES.find(t => t.value === watermarkType)?.preview}
-                            alt="水印预览"
-                            className="w-20 h-20 object-contain border border-gray-300 rounded"
-                        />
-                    </div>
+                                         {/* 水印预览 */}
+                     <div className="mt-2 p-2 bg-gray-50 rounded">
+                         <p className="text-sm text-gray-600 mb-2">水印预览:</p>
+                         <Image
+                             src={WATERMARK_TYPES.find(t => t.value === watermarkType)?.preview || ''}
+                             alt="水印预览"
+                             width={80}
+                             height={80}
+                             className="object-contain border border-gray-300 rounded"
+                         />
+                     </div>
                 </div>
 
                 {/* 处理按钮 */}
