@@ -73,8 +73,21 @@ async function processWatermark(videoPath, watermarkPath, outputPath) {
         console.log(`Watermark: ${watermarkPath}`);
         console.log(`Output: ${outputPath}`);
         
-        // 使用ffmpeg-static包提供的FFmpeg路径
-        const ffmpegPath = ffmpeg;
+        // 在Vercel环境中使用正确的FFmpeg路径
+        let ffmpegPath = ffmpeg;
+        
+        // 检查是否是Vercel环境
+        if (process.env.VERCEL) {
+            // Vercel环境中的FFmpeg路径
+            ffmpegPath = '/opt/ffmpeg';
+        } else if (process.platform === 'win32') {
+            // Windows本地环境
+            ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+        } else {
+            // Unix本地环境
+            ffmpegPath = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg');
+        }
+        
         console.log(`Using FFmpeg path: ${ffmpegPath}`);
         
         const ffmpegProcess = spawn(ffmpegPath, [
