@@ -2,12 +2,10 @@
     "$schema": "https://openapi.vercel.sh/vercel.json",
     "functions": {
       "app/api/convert/route.ts": {
-        "memory": 3009,
-        "maxDuration": 300
+        "memory": 3009
       },
       "app/api/video/watermark/route.ts": {
-        "memory": 3009,
-        "maxDuration": 300
+        "memory": 3009
       }
     }
   }

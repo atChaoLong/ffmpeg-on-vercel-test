@@ -5,13 +5,11 @@ const nextConfig: NextConfig = {
     "/app/api/convert": [
       "./public/videos/sample.mp4",
       "./node_modules/ffmpeg-static/ffmpeg",
-      "./node_modules/ffmpeg-static/ffmpeg.exe",
     ],
     "/app/api/video/watermark": [
       "./public/videos/sample.mp4",
       "./public/images/watermark/*.png",
       "./node_modules/ffmpeg-static/ffmpeg",
-      "./node_modules/ffmpeg-static/ffmpeg.exe",
     ],
   },
 };
