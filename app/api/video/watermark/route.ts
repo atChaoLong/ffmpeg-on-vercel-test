@@ -11,32 +11,34 @@ interface WatermarkPosition {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const { searchParams } = new URL(request.url);
-  const inputFile = "sample.mp4";
-  const watermark = searchParams.get("watermark") || "kling";
-  const position = searchParams.get("position") || "bottom-right";
-  const opacity = searchParams.get("opacity") || "0.7";
-  const size = searchParams.get("size") || "small";
-
-  if (!inputFile) {
-    return NextResponse.json(
-      { error: "Input file parameter required" },
-      { status: 400 }
-    );
-  }
-
-  // 验证水印文件是否存在
-  const watermarkPath = path.join(process.cwd(), "public", "images", "watermark", `${watermark}.png`);
   try {
-    await fs.access(watermarkPath);
-  } catch {
-    return NextResponse.json(
-      { error: `Watermark file ${watermark}.png not found` },
-      { status: 404 }
-    );
-  }
+    const { searchParams } = new URL(request.url);
+    const inputFile = "sample.mp4";
+    const watermark = searchParams.get("watermark") || "kling";
+    const position = searchParams.get("position") || "bottom-right";
+    const opacity = searchParams.get("opacity") || "0.7";
+    const size = searchParams.get("size") || "small";
 
-  try {
+    console.log("Watermark API called with params:", { watermark, position, opacity, size });
+
+    if (!inputFile) {
+      return NextResponse.json(
+        { error: "Input file parameter required" },
+        { status: 400 }
+      );
+    }
+
+    // 验证水印文件是否存在
+    const watermarkPath = path.join(process.cwd(), "public", "images", "watermark", `${watermark}.png`);
+    try {
+      await fs.access(watermarkPath);
+    } catch {
+      return NextResponse.json(
+        { error: `Watermark file ${watermark}.png not found` },
+        { status: 404 }
+      );
+    }
+
     // Define paths
     const inputPath = path.join(process.cwd(), "public", "videos", inputFile);
 
@@ -85,6 +87,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       "pipe:1" // pipe to stdout
     ];
 
+    console.log("FFmpeg args:", ffmpegArgs);
+
     // Run FFmpeg watermarking
     const readableStream = new ReadableStream({
       start(controller) {
@@ -124,6 +128,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 // Controller already closed by client
               }
             } else {
+              console.error("FFmpeg failed with code:", code);
+              console.error("FFmpeg stderr:", stderr);
               try {
                 if (controller.desiredSize !== null) {
                   controller.error(new Error(`FFmpeg failed with code ${code}: ${stderr}`));
@@ -138,6 +144,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         process.on("error", (error: Error) => {
           if (!isClosed) {
             isClosed = true;
+            console.error("FFmpeg process error:", error);
             try {
               if (controller.desiredSize !== null) {
                 controller.error(error);
@@ -158,6 +165,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       status: 200,
       headers,
     });
+
   } catch (error) {
     console.error("Video watermarking error:", error);
 

@@ -51,8 +51,17 @@ export default function WatermarkTestPage() {
       const response = await fetch(`/api/video/watermark?${params}`);
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
+        // 检查响应是否为JSON格式
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
+        } else {
+          // 如果不是JSON，可能是HTML错误页面
+          const errorText = await response.text();
+          console.error('Non-JSON error response:', errorText);
+          throw new Error(`服务器错误 (${response.status}): 请检查API路由配置`);
+        }
       }
 
       // 创建下载链接
