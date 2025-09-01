@@ -2,7 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app/api/video/watermark/route.js": {
-      "memory": 3009
+      "memory": 3009,
+      "maxDuration": 300
+    }
+  },
+  "build": {
+    "env": {
+      "FFMPEG_PATH": "/opt/ffmpeg"
     }
   }
 }

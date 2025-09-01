@@ -70,16 +70,24 @@ async function uploadToR2(filePath, key) {
 async function processWatermark(videoPath, watermarkPath, outputPath) {
     return new Promise((resolve, reject) => {
         // 获取正确的FFmpeg路径
-        const ffmpegPath = ffmpeg || 'ffmpeg';
+        let ffmpegPath = ffmpeg || 'ffmpeg';
+        
+        // 在Vercel环境中使用系统FFmpeg
+        if (process.env.VERCEL) {
+            ffmpegPath = '/opt/ffmpeg';
+        }
+        
+        console.log(`Environment: ${process.env.VERCEL ? 'Vercel' : 'Local'}`);
         console.log(`Using FFmpeg path: ${ffmpegPath}`);
         console.log(`FFmpeg exists: ${fs.existsSync(ffmpegPath)}`);
         console.log(`Current working directory: ${process.cwd()}`);
-        console.log(`Node modules path: ${path.join(process.cwd(), 'node_modules', 'ffmpeg-static')}`);
         
         // 检查FFmpeg是否存在
         if (!fs.existsSync(ffmpegPath)) {
             // 尝试其他可能的路径
             const alternativePaths = [
+                '/opt/ffmpeg', // Vercel系统路径
+                '/usr/bin/ffmpeg', // Linux系统路径
                 path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
                 path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg'),
                 'ffmpeg.exe',
@@ -100,19 +108,7 @@ async function processWatermark(videoPath, watermarkPath, outputPath) {
             }
             
             console.log(`Using alternative FFmpeg path: ${foundPath}`);
-            const ffmpegProcess = spawn(foundPath, [
-                '-i', videoPath,
-                '-i', watermarkPath,
-                '-filter_complex', 'overlay=W-w-10:H-h-10',
-                '-c:a', 'copy',
-                '-y', // 覆盖输出文件
-                outputPath
-            ], {
-                stdio: ['pipe', 'pipe', 'pipe']
-            });
-            
-            handleFFmpegProcess(ffmpegProcess, outputPath, resolve, reject);
-            return;
+            ffmpegPath = foundPath;
         }
 
         const ffmpegProcess = spawn(ffmpegPath, [
