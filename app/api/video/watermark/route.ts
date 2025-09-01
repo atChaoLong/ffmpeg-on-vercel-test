@@ -11,38 +11,26 @@ interface WatermarkPosition {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const { searchParams } = new URL(request.url);
+  const inputFile = "sample.mp4";
+  const watermarkFile = searchParams.get("watermark") || "kling.png";
+  const position = searchParams.get("position") || "bottom-right";
+  const opacity = searchParams.get("opacity") || "0.8";
+  const scale = searchParams.get("scale") || "0.1";
+
+  if (!inputFile) {
+    return NextResponse.json(
+      { error: "Input file parameter required" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const inputFile = "sample.mp4";
-    const watermark = searchParams.get("watermark") || "kling";
-    const position = searchParams.get("position") || "bottom-right";
-    const opacity = searchParams.get("opacity") || "0.7";
-    const size = searchParams.get("size") || "small";
-
-    console.log("Watermark API called with params:", { watermark, position, opacity, size });
-
-    if (!inputFile) {
-      return NextResponse.json(
-        { error: "Input file parameter required" },
-        { status: 400 }
-      );
-    }
-
-    // 验证水印文件是否存在
-    const watermarkPath = path.join(process.cwd(), "public", "images", "watermark", `${watermark}.png`);
-    try {
-      await fs.access(watermarkPath);
-    } catch {
-      return NextResponse.json(
-        { error: `Watermark file ${watermark}.png not found` },
-        { status: 404 }
-      );
-    }
-
-    // Define paths
+    // 定义路径 - 假设文件在 public/videos/ 和 public/images/watermark/
     const inputPath = path.join(process.cwd(), "public", "videos", inputFile);
+    const watermarkPath = path.join(process.cwd(), "public", "images", "watermark", watermarkFile);
 
-    // Check if input file exists
+    // 检查输入文件是否存在
     try {
       await fs.access(inputPath);
     } catch {
@@ -52,44 +40,45 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 水印位置设置
+    // 检查水印文件是否存在
+    try {
+      await fs.access(watermarkPath);
+    } catch {
+      return NextResponse.json(
+        { error: "Watermark file not found" },
+        { status: 404 }
+      );
+    }
+
+    // 设置水印位置映射
     const positionSettings: WatermarkPosition = {
       "top-left": "10:10",
-      "top-right": "W-w-10:10", 
+      "top-right": "W-w-10:10",
       "bottom-left": "10:H-h-10",
       "bottom-right": "W-w-10:H-h-10",
-      "center": "(W-w)/2:(H-h)/2"
-    };
-
-    // 水印大小设置
-    const sizeSettings: { [key: string]: string } = {
-      "small": "iw*0.1:ih*0.1",
-      "medium": "iw*0.15:ih*0.15", 
-      "large": "iw*0.2:ih*0.2"
+      "center": "(W-w)/2:(H-h)/2",
     };
 
     const watermarkPosition = positionSettings[position] || positionSettings["bottom-right"];
-    const watermarkSize = sizeSettings[size] || sizeSettings["small"];
 
-    // FFmpeg arguments for watermarking
+    // FFmpeg 参数用于添加水印
     const ffmpegArgs = [
-      "-i", inputPath,
-      "-i", watermarkPath,
+      "-i", inputPath,           // 输入视频文件
+      "-i", watermarkPath,       // 输入水印图片
       "-filter_complex", 
-      `[1:v]scale=${watermarkSize},format=rgba,colorchannelmixer=aa=${opacity}[watermark];[0:v][watermark]overlay=${watermarkPosition}`,
-      "-c:v", "libx264",
-      "-pix_fmt", "yuv420p",
-      "-preset", "veryfast",
-      "-c:a", "aac",
-      "-b:a", "128k",
-      "-f", "mp4",
-      "-movflags", "+faststart",
-      "pipe:1" // pipe to stdout
+      `[1:v]scale=iw*${scale}:ih*${scale},format=rgba,colorchannelmixer=aa=${opacity}[watermark];[0:v][watermark]overlay=${watermarkPosition}[v]`,
+      "-map", "[v]",             // 映射处理后的视频流
+      "-map", "0:a?",            // 映射音频流（如果存在）
+      "-c:v", "libx264",         // 视频编码器
+      "-c:a", "aac",             // 音频编码器
+      "-preset", "medium",       // 编码预设
+      "-crf", "23",              // 质量设置
+      "-movflags", "+faststart", // 优化网络播放
+      "-f", "mp4",               // 输出格式
+      "pipe:1",                  // 输出到标准输出
     ];
 
-    console.log("FFmpeg args:", ffmpegArgs);
-
-    // Run FFmpeg watermarking
+    // 运行 FFmpeg 水印处理
     const readableStream = new ReadableStream({
       start(controller) {
         if (!ffmpeg) {
@@ -107,7 +96,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             try {
               controller.enqueue(new Uint8Array(data));
             } catch (error) {
-              // Controller might be closed, ignore the error
+              // Controller 可能已关闭，忽略错误
             }
           }
         });
@@ -125,17 +114,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                   controller.close();
                 }
               } catch (error) {
-                // Controller already closed by client
+                // Controller 已被客户端关闭
               }
             } else {
-              console.error("FFmpeg failed with code:", code);
-              console.error("FFmpeg stderr:", stderr);
               try {
                 if (controller.desiredSize !== null) {
                   controller.error(new Error(`FFmpeg failed with code ${code}: ${stderr}`));
                 }
               } catch (error) {
-                // Controller already closed by client
+                // Controller 已被客户端关闭
               }
             }
           }
@@ -144,20 +131,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         process.on("error", (error: Error) => {
           if (!isClosed) {
             isClosed = true;
-            console.error("FFmpeg process error:", error);
             try {
               if (controller.desiredSize !== null) {
                 controller.error(error);
               }
             } catch (error) {
-              // Controller already closed by client
+              // Controller 已被客户端关闭
             }
           }
         });
       }
     });
 
-    // Set appropriate headers for streaming
+    // 设置流式传输的适当头部
     const headers = new Headers();
     headers.set("Content-Type", "video/mp4");
 
@@ -165,16 +151,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       status: 200,
       headers,
     });
-
   } catch (error) {
-    console.error("Video watermarking error:", error);
+    console.error("Video watermark error:", error);
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error occurred";
 
     return NextResponse.json(
       {
-        error: "Video watermarking failed",
+        error: "Video watermark failed",
         details: errorMessage,
       },
       { status: 500 }
