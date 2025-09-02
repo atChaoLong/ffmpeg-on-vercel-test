@@ -160,18 +160,26 @@ export default function WatermarkTestPage() {
                 </label>
                 <input
                   type="range"
-                  min="0.05"
-                  max="0.3"
-                  step="0.05"
+                  min="0.01"
+                  max="1.0"
+                  step="0.01"
                   value={scale}
                   onChange={(e) => setScale(e.target.value)}
                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                   disabled={isProcessing}
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>5%</span>
-                  <span>30%</span>
+                  <span>1%</span>
+                  <span>100%</span>
                 </div>
+                {/* 大小警告提示 */}
+                {parseFloat(scale) > 0.5 && (
+                  <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-xs text-yellow-700">
+                      ⚠️ 水印过大可能遮挡视频主要内容，建议控制在 50% 以下
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* 格式选择 */}
