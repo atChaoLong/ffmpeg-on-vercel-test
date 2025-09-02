@@ -66,17 +66,36 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const watermarkPosition = positionSettings[position] || positionSettings["bottom-right"];
 
-    // 根据格式设置编码器和参数
+    // 根据格式设置编码器和参数 - 优化版本
     const videoCodec = format === "webm" ? "libvpx-vp9" : "libx264";
     const audioCodec = format === "webm" ? "libopus" : "aac";
     const fastStart = format === "webm" ? [] : ["-movflags", "+faststart"];
     
-    // MP4 特定的编码参数
+    // MP4 特定的编码参数 - 优化质量
     const mp4SpecificArgs = format === "mp4" ? [
-      "-pix_fmt", "yuv420p", // 确保兼容性
-      "-profile:v", "baseline", // 使用 baseline 配置文件，兼容性更好
-      "-level", "3.0"         // 降低 H.264 级别
+      "-pix_fmt", "yuv420p",           // 确保兼容性
+      "-profile:v", "high",            // 使用 high 配置文件，质量更好
+      "-level", "4.1",                 // 支持更高分辨率和比特率
+      "-x264-params", "ref=4:bframes=3:me=umh:subme=9", // 高级编码参数
+      "-b:v", "0",                     // 使用 CRF 模式，自动比特率
+      "-maxrate", "10M",               // 最大比特率限制
+      "-bufsize", "20M"                // 缓冲区大小
     ] : [];
+
+    // WebM 特定的编码参数 - 优化质量
+    const webmSpecificArgs = format === "webm" ? [
+      "-b:v", "0",                     // 使用 CRF 模式
+      "-crf", "30",                    // WebM 的 CRF 范围是 0-63，30 是好的质量
+      "-b:a", "128k",                  // 音频比特率
+      "-deadline", "good",             // 编码质量设置
+      "-cpu-used", "2"                 // CPU 使用优化
+    ] : [];
+
+    // 通用质量参数
+    const qualityArgs = [
+      "-preset", format === "webm" ? "good" : "medium",  // 编码预设
+      "-crf", format === "webm" ? "30" : "23",           // 质量设置（MP4用23，WebM用30）
+    ];
 
     // FFmpeg 参数用于添加水印
     const ffmpegArgs = [
@@ -88,9 +107,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       "-map", "0:a?",            // 映射音频流（如果存在）
       "-c:v", videoCodec,        // 视频编码器
       "-c:a", audioCodec,        // 音频编码器
-      "-preset", "medium",       // 编码预设
-      "-crf", "23",              // 质量设置
+      ...qualityArgs,            // 通用质量参数
       ...mp4SpecificArgs,        // MP4 特定参数
+      ...webmSpecificArgs,       // WebM 特定参数
       ...fastStart,              // 优化网络播放（仅MP4）
       "-f", format,              // 输出格式
       "-y",                      // 覆盖输出文件
