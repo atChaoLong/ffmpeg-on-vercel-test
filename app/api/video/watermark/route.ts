@@ -38,22 +38,6 @@ interface WatermarkBody {
   format?: "mp4" | "webm";
 }
 
-function resolveFfmpegPath(): string {
-  // 尝试优先使用 ffmpeg-static 暴露的路径
-  if (typeof ffmpeg === "string" && ffmpeg) return ffmpeg;
-  try {
-    // 回退使用 require.resolve，兼容打包路径
-    const modPath = require.resolve("ffmpeg-static");
-    // ffmpeg-static 默认导出的是绝对路径字符串；如果被打包重定向，直接返回该路径
-    // 这里通过动态 import 再取默认导出，避免 ESM/CJS 差异
-    // 但在运行时我们已经有了 ffmpeg 变量；此处仅作为兜底
-    return modPath;
-  } catch (_) {
-    // 最后兜底尝试常见相对路径
-    return "./node_modules/ffmpeg-static/ffmpeg";
-  }
-}
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const tmpDir = "/tmp";
   let inputTmpPath = "";
@@ -178,8 +162,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       outputPath,
     ];
 
-    // 运行 FFmpeg 水印处理
-    const ffmpegPath = resolveFfmpegPath();
+    // 运行 FFmpeg 水印处理（与 convert 一致的可执行路径写法）
+    const ffmpegPath = "./node_modules/ffmpeg-static/ffmpeg";
 
     const resultJson: WatermarkResult = await new Promise<WatermarkResult>((resolve) => {
       let stderr = "";
