@@ -12,7 +12,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const { data, error } = await supabase
       .from('ffmpeg_on_vercel_test')
-      .select('*')
+      .select('*') // includes watermark_location
       .order('created_at', { ascending: false })
       .limit(limit);
 

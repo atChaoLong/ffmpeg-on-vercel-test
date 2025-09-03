@@ -19,14 +19,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Video ID is required" }, { status: 400 });
     }
 
-    // 将水印选择即时写入，便于列表实时显示
-    const combinedMark = watermarkFile && position ? `${watermarkFile}|${position}` : watermarkFile || null;
-
     const { data, error } = await supabase
       .from('ffmpeg_on_vercel_test')
       .update({
         status: 'queued',
-        watermark_url: combinedMark,
+        watermark_url: watermarkFile || null,
+        watermark_location: position || null,
         updated_at: new Date().toISOString()
       })
       .eq('id', videoId)

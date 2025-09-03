@@ -188,11 +188,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
             const watermarkVideoUrl = `https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/${key}`;
 
+            // 仅更新视频与状态；不覆盖 watermark_url；若 watermark_location 为空可补写
             await supabase
               .from('ffmpeg_on_vercel_test')
               .update({
                 watermark_video_url: watermarkVideoUrl,
-                watermark_url: watermarkFileFinal, // 保存选择的水印标识（文件名）
                 status: 'completed',
                 updated_at: new Date().toISOString()
               })
