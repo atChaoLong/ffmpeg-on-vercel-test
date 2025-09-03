@@ -4,18 +4,31 @@ import { supabase } from "@/app/lib/supabase";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface StartBody {
+  videoId: number;
+  watermarkFile?: string; // e.g., kling.png
+  position?: string;      // e.g., bottom-right
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const body = await request.json();
-    const { videoId } = body as { videoId: number };
+    const body = (await request.json()) as StartBody;
+    const { videoId, watermarkFile, position } = body;
 
     if (!videoId) {
       return NextResponse.json({ error: "Video ID is required" }, { status: 400 });
     }
 
+    // 将水印选择即时写入，便于列表实时显示
+    const combinedMark = watermarkFile && position ? `${watermarkFile}|${position}` : watermarkFile || null;
+
     const { data, error } = await supabase
       .from('ffmpeg_on_vercel_test')
-      .update({ status: 'queued', updated_at: new Date().toISOString() })
+      .update({
+        status: 'queued',
+        watermark_url: combinedMark,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', videoId)
       .select()
       .single();

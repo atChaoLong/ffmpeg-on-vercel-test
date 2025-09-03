@@ -211,7 +211,7 @@ export default function Home() {
       const startRes = await fetch("/api/video/watermark/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoId: currentVideo.id })
+        body: JSON.stringify({ videoId: currentVideo.id, watermarkFile, position })
       });
       const startJson = await startRes.json();
       if (!startRes.ok || !startJson?.success) {
@@ -425,6 +425,7 @@ export default function Home() {
                     <th className="py-2 pr-4">ID</th>
                     <th className="py-2 pr-4">状态</th>
                     <th className="py-2 pr-4">水印</th>
+                    <th className="py-2 pr-4">位置</th>
                     <th className="py-2 pr-4">原视频</th>
                     <th className="py-2 pr-4">水印视频</th>
                     <th className="py-2 pr-4">更新时间</th>
@@ -446,6 +447,8 @@ export default function Home() {
                         </span>
                       </td>
                       <td className="py-2 pr-4">{t.watermark_url ? t.watermark_url.replace('.png','') : '-'}</td>
+                      <td className="py-2 pr-4">{t.watermark_url ? (t.watermark_url.split('|')[0] || '').replace('.png','') : '-'}</td>
+                      <td className="py-2 pr-4">{t.watermark_url && t.watermark_url.includes('|') ? (t.watermark_url.split('|')[1] || '-') : '-'}</td>
                       <td className="py-2 pr-4 truncate max-w-[240px]">
                         {t.video_url ? <a className="text-blue-600 hover:underline" href={t.video_url} target="_blank">原视频</a> : '-'}
                       </td>
@@ -470,7 +473,7 @@ export default function Home() {
                   ))}
                   {tasks.length === 0 && (
                     <tr>
-                      <td className="py-4 text-gray-500" colSpan={7}>暂无任务</td>
+                      <td className="py-4 text-gray-500" colSpan={8}>暂无任务</td>
                     </tr>
                   )}
                 </tbody>
