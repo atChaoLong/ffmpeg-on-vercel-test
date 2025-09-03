@@ -1,73 +1,43 @@
-# 🎬 视频处理工具
+# 视频水印添加工具
 
-一个基于 Next.js 15 的专业视频处理工具，支持视频上传、水印添加和格式转换功能。
+这是一个基于 Next.js 和 FFmpeg 的视频水印添加工具，支持上传视频到 Cloudflare R2 存储并添加自定义水印。
 
-## ✨ 主要功能
+## 功能特性
 
-### 📤 视频上传
-- 支持多种视频格式（MP4, WebM, AVI 等）
-- 自动上传到 Cloudflare R2 存储
-- 文件重命名为 UUID 格式，避免冲突
-- 实时上传进度显示
-- 自动水印处理流程
+- 🎥 支持多种视频格式上传（MP4, WebM, AVI 等）
+- 🖼️ 7种预设水印图片可选
+- 📍 5种水印位置设置（左上角、右上角、左下角、右下角、中心）
+- 🎛️ 可调节水印透明度和缩放比例
+- 📱 响应式设计，支持移动端
+- ⚡ 实时处理状态显示
+- 💾 自动保存到 Cloudflare R2 和 Supabase
 
-### 🏷️ 水印添加
-- 7种AI工具品牌水印选择
-- 5种位置选择（四角+居中）
-- 透明度调节（10%-100%）
-- 3种大小规格（小、中、大）
-- 实时预览设置效果
+## 技术栈
 
-### 🔄 格式转换
-- 支持 WebM 和 MP4 格式
-- 3种质量等级选择
-- VP9/H.264 视频编码
-- Opus/AAC 音频编码
-- 流式处理，快速下载
-
-## 🚀 技术架构
-
-- **前端**: Next.js 15 + React 19 + TypeScript + Tailwind CSS
+- **前端**: Next.js 15, React 19, TypeScript, Tailwind CSS
+- **后端**: Next.js API Routes
+- **视频处理**: FFmpeg
 - **存储**: Cloudflare R2 (S3 兼容)
 - **数据库**: Supabase (PostgreSQL)
-- **视频处理**: FFmpeg
 - **部署**: Vercel
 
-## 📋 环境要求
+## 环境配置
 
-- Node.js 18+
-- FFmpeg (通过 ffmpeg-static 包提供)
+在项目根目录创建 `.env.local` 文件：
 
-## 🔧 安装和配置
-
-1. 克隆项目
 ```bash
-git clone <repository-url>
-cd ffmpeg-on-vercel-test
-```
-
-2. 安装依赖
-```bash
-npm install
-```
-
-3. 配置环境变量
-创建 `.env.local` 文件并添加以下配置：
-
-```env
-# Supabase 配置
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-
 # Cloudflare R2 配置
-CLOUDFLARE_R2_ACCESS_KEY_ID=your_r2_access_key_id
-CLOUDFLARE_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
-CLOUDFLARE_R2_BUCKET_NAME=your_r2_bucket_name
-CLOUDFLARE_R2_ACCOUNT_ID=your_r2_account_id
+CLOUDFLARE_R2_ACCESS_KEY_ID=your_access_key_id
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=your_secret_access_key
+CLOUDFLARE_R2_BUCKET_NAME=your_bucket_name
+CLOUDFLARE_R2_ACCOUNT_ID=your_account_id
+
+# Supabase 配置
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 ```
 
-4. 配置 Supabase 数据库
-执行以下 SQL 创建表：
+## 数据库表结构
 
 ```sql
 create table public.ffmpeg_on_vercel_test (
@@ -83,64 +53,93 @@ create table public.ffmpeg_on_vercel_test (
 ) TABLESPACE pg_default;
 ```
 
-5. 运行开发服务器
+## 安装和运行
+
+1. 安装依赖：
+```bash
+npm install
+```
+
+2. 配置环境变量（见上方环境配置）
+
+3. 运行开发服务器：
 ```bash
 npm run dev
 ```
 
-## 📁 项目结构
-
-```
-app/
-├── api/                    # API 路由
-│   ├── upload/            # 视频上传
-│   ├── watermark/         # 水印处理
-│   └── status/[id]/       # 状态查询
-├── lib/                   # 工具库
-│   ├── supabase.js        # Supabase 客户端
-│   ├── r2-client.ts       # R2 客户端
-│   ├── types.ts           # 类型定义
-│   └── hooks/             # 自定义 Hooks
-│       └── useVideoProcessing.ts
-├── page.tsx               # 主页面
-└── layout.tsx             # 布局组件
+4. 构建生产版本：
+```bash
+npm run build
+npm start
 ```
 
-## 🔄 工作流程
+## 使用流程
 
-1. **视频上传**: 用户选择视频文件，系统自动上传到 R2 存储
-2. **水印处理**: 使用 FFmpeg 处理添加水印，支持位置、透明度、大小调节
-3. **结果保存**: 处理完成后的视频自动上传到 R2 存储
-4. **数据库更新**: 水印视频链接保存到 Supabase 数据库
-5. **状态跟踪**: 实时查询处理状态，支持错误处理和重试
-6. **结果访问**: 通过 R2 链接直接访问或下载水印视频
+1. **上传视频**: 点击"选择视频文件"按钮，选择要处理的视频文件
+2. **配置水印**: 
+   - 选择水印图片（7种预设可选）
+   - 设置水印位置
+   - 调整透明度和缩放比例
+   - 选择输出格式（MP4 或 WebM）
+3. **添加水印**: 点击"添加水印"按钮开始处理
+4. **查看结果**: 处理完成后可以预览和下载带水印的视频
 
-## 🏷️ 水印处理方式
+## API 接口
 
-### 现有接口 (`/api/video/watermark`)
-- **请求方式**: GET
-- **参数**: 通过查询字符串传递
-- **处理方式**: 流式处理，直接返回处理后的视频流
-- **适用场景**: 实时水印处理，无需保存到存储
+### 视频上传
+- **POST** `/api/video/upload`
+- 上传视频文件到 Cloudflare R2
 
-### 新接口 (`/api/watermark`)
-- **请求方式**: GET
-- **参数**: 通过查询字符串传递，包含 recordId
-- **处理方式**: 处理完成后保存到 R2 存储
-- **适用场景**: 基于数据库记录的水印处理，结果持久化存储
-- **返回结果**: JSON 响应，包含水印视频的 R2 链接
+### 水印处理
+- **POST** `/api/video/watermark`
+- 为指定视频添加水印
 
-## ⚠️ 注意事项
+### 状态查询
+- **GET** `/api/video/status?videoId={id}`
+- 查询视频处理状态
 
-- Vercel 请求体限制为 4.5MB，大文件需要通过客户端上传
-- 视频处理需要 FFmpeg 支持，已通过 ffmpeg-static 包提供
+## 水印图片
+
+项目包含以下预设水印图片：
+- `kling.png` - Kling
+- `luma.png` - Luma
+- `pika.png` - Pika
+- `runway.png` - Runway
+- `stability.png` - Stability
+- `veo.png` - Veo
+- `vidu.png` - Vidu
+
+## 部署到 Vercel
+
+1. 将代码推送到 GitHub
+2. 在 Vercel 中导入项目
+3. 配置环境变量
+4. 部署
+
+## 注意事项
+
+- 视频文件大小限制：100MB
+- 支持的视频格式：所有 FFmpeg 支持的格式
+- 处理时间取决于视频长度和复杂度
 - 确保 Cloudflare R2 和 Supabase 配置正确
-- 水印图片需要预先上传到 R2 存储的 `/images/watermark/` 目录
 
-## 🚀 部署
+## 故障排除
 
-项目已配置 Vercel 部署，支持自动部署和边缘函数。
+### 常见问题
 
-## �� 许可证
+1. **FFmpeg 错误**: 检查 `ffmpeg-static` 是否正确安装
+2. **上传失败**: 检查 Cloudflare R2 配置和权限
+3. **数据库错误**: 检查 Supabase 连接和表结构
+4. **水印处理失败**: 检查视频格式是否支持
+
+### 日志查看
+
+在 Vercel 部署中，可以通过 Vercel 仪表板查看函数日志来调试问题。
+
+## 许可证
 
 MIT License
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
