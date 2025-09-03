@@ -8,6 +8,7 @@ interface VideoData {
   video_url: string;
   watermark_video_url: string | null;
   watermark_url: string | null;
+  watermark_location?: string | null;
   status: string;
   error_message: string | null;
   created_at: string;
@@ -448,7 +449,6 @@ export default function Home() {
                       </td>
                       <td className="py-2 pr-4">{(() => { const w = t.watermark_url || ""; const parts = w.split('|'); const name = (parts[0] || "").replace('.png',''); return name || '-'; })()}</td>
                       <td className="py-2 pr-4">{t.watermark_location || '-'}</td>
-                      <td className="py-2 pr-4">{t.watermark_url && t.watermark_url.includes('|') ? (t.watermark_url.split('|')[1] || '-') : '-'}</td>
                       <td className="py-2 pr-4 truncate max-w-[240px]">
                         {t.video_url ? <a className="text-blue-600 hover:underline" href={t.video_url} target="_blank">原视频</a> : '-'}
                       </td>
