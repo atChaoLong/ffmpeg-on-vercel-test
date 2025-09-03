@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { v4 as uuidv4 } from "uuid";
 import Navigation from "./components/Navigation";
 
 interface VideoData {
@@ -74,8 +73,8 @@ export default function Home() {
               setError(updatedVideo.error_message || "处理失败");
             }
           }
-        } catch (error) {
-          console.error("Status check failed:", error);
+        } catch (err) {
+          console.error("Status check failed:", err);
         }
       }, 2000); // 每2秒检查一次
     }
@@ -169,9 +168,10 @@ export default function Home() {
       });
       setStatus("视频上传成功！现在可以添加水印");
       setUploadProgress(100);
-    } catch (error: any) {
-      setError(error?.message || "上传过程中发生错误");
-      console.error("Upload error:", error);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "上传过程中发生错误";
+      setError(message);
+      console.error("Upload error:", err);
     } finally {
       setUploading(false);
     }
@@ -204,15 +204,15 @@ export default function Home() {
 
       if (result.success) {
         setStatus("水印添加请求已提交，正在处理中...");
-        // 状态更新会通过轮询获取
       } else {
         setError(result.error || "水印添加失败");
         setProcessing(false);
       }
-    } catch (error) {
-      setError("水印添加过程中发生错误");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "水印添加过程中发生错误";
+      setError(message);
       setProcessing(false);
-      console.error("Watermark error:", error);
+      console.error("Watermark error:", err);
     }
   };
 

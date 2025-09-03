@@ -25,13 +25,26 @@ interface WatermarkPosition {
   [key: string]: string;
 }
 
+type WatermarkResult =
+  | { success: true; watermarkVideoUrl: string }
+  | { success: false; error: string; stderr?: string };
+
+interface WatermarkBody {
+  videoId: number;
+  watermarkFile?: string;
+  position?: string;
+  opacity?: string;
+  scale?: string;
+  format?: "mp4" | "webm";
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const tmpDir = "/tmp";
   let inputTmpPath = "";
   let outputPath = "";
 
   try {
-    const body = await request.json();
+    const body = (await request.json()) as WatermarkBody;
     const { videoId, watermarkFile, position, opacity, scale, format } = body;
 
     if (!videoId) {
@@ -152,7 +165,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // 运行 FFmpeg 水印处理
     const ffmpegPath = (ffmpeg as string) || "./node_modules/ffmpeg-static/ffmpeg";
 
-    const resultJson: any = await new Promise((resolve) => {
+    const resultJson: WatermarkResult = await new Promise<WatermarkResult>((resolve) => {
       let stderr = "";
       const proc = spawn(ffmpegPath, ffmpegArgs, { stdio: 'pipe' });
 
@@ -187,12 +200,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               .eq('id', videoId);
 
             resolve({ success: true, watermarkVideoUrl });
-          } catch (e: any) {
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : '上传失败';
             await supabase
               .from('ffmpeg_on_vercel_test')
-              .update({ status: 'failed', error_message: e?.message || '上传失败' })
+              .update({ status: 'failed', error_message: message })
               .eq('id', videoId);
-            resolve({ success: false, error: e?.message || '上传失败' });
+            resolve({ success: false, error: message });
           }
         } else {
           await supabase
@@ -221,13 +235,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     return NextResponse.json(resultJson, { status: 500 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Video watermark error:", error);
     // 清理临时文件
     try { if (inputTmpPath) await fs.unlink(inputTmpPath); } catch {}
     try { if (outputPath) await fs.unlink(outputPath); } catch {}
 
-    const errorMessage = error?.message || "Unknown error occurred";
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     return NextResponse.json({ error: "Video watermark failed", details: errorMessage }, { status: 500 });
   }
 }
