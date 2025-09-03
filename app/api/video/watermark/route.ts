@@ -192,6 +192,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               .from('ffmpeg_on_vercel_test')
               .update({
                 watermark_video_url: watermarkVideoUrl,
+                watermark_url: watermarkFileFinal, // 保存选择的水印标识（文件名）
                 status: 'completed',
                 updated_at: new Date().toISOString()
               })

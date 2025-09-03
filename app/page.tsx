@@ -47,6 +47,16 @@ export default function Home() {
   const [batchUploading, setBatchUploading] = useState(false);
   const [batchStatus, setBatchStatus] = useState<string>("");
   const [tasks, setTasks] = useState<VideoData[]>([]);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  const handleSelectTask = (task: VideoData) => {
+    setCurrentVideo(task);
+    setStatus("已选择任务，配置下方水印参数后开始处理");
+    setError("");
+    setProcessing(false);
+    // 滚动到设置区
+    setTimeout(() => settingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
 
   // 轮询检查状态
   useEffect(() => {
@@ -312,8 +322,9 @@ export default function Home() {
 
           {/* 水印设置区域 */}
           {currentVideo && (
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">2. 水印设置</h2>
+            <div ref={settingsRef} className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-2">2. 水印设置</h2>
+              <p className="text-sm text-gray-500 mb-4">当前任务 ID：{currentVideo.id}</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -413,9 +424,11 @@ export default function Home() {
                   <tr className="text-left text-gray-500">
                     <th className="py-2 pr-4">ID</th>
                     <th className="py-2 pr-4">状态</th>
+                    <th className="py-2 pr-4">水印</th>
                     <th className="py-2 pr-4">原视频</th>
                     <th className="py-2 pr-4">水印视频</th>
                     <th className="py-2 pr-4">更新时间</th>
+                    <th className="py-2 pr-4">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -426,11 +439,13 @@ export default function Home() {
                         <span className={
                           t.status === 'completed' ? 'text-green-600' :
                           t.status === 'failed' ? 'text-red-600' :
-                          t.status === 'processing' ? 'text-blue-600' : 'text-gray-600'
+                          t.status === 'processing' ? 'text-blue-600' :
+                          t.status === 'queued' ? 'text-yellow-600' : 'text-gray-600'
                         }>
                           {t.status || '-'}
                         </span>
                       </td>
+                      <td className="py-2 pr-4">{t.watermark_url ? t.watermark_url.replace('.png','') : '-'}</td>
                       <td className="py-2 pr-4 truncate max-w-[240px]">
                         {t.video_url ? <a className="text-blue-600 hover:underline" href={t.video_url} target="_blank">原视频</a> : '-'}
                       </td>
@@ -438,11 +453,24 @@ export default function Home() {
                         {t.watermark_video_url ? <a className="text-green-600 hover:underline" href={t.watermark_video_url} target="_blank">水印视频</a> : '-'}
                       </td>
                       <td className="py-2 pr-4">{t.updated_at ? new Date(t.updated_at).toLocaleString() : new Date(t.created_at).toLocaleString()}</td>
+                      <td className="py-2 pr-4">
+                        <button
+                          onClick={() => handleSelectTask(t)}
+                          disabled={t.status === 'processing' || t.status === 'queued'}
+                          className={`px-3 py-1 rounded ${
+                            t.status === 'processing' || t.status === 'queued'
+                              ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          }`}
+                        >
+                          配置水印
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {tasks.length === 0 && (
                     <tr>
-                      <td className="py-4 text-gray-500" colSpan={5}>暂无任务</td>
+                      <td className="py-4 text-gray-500" colSpan={7}>暂无任务</td>
                     </tr>
                   )}
                 </tbody>
