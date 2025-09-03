@@ -146,15 +146,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // FFmpeg 参数用于添加水印
+    const filterGraph = scalePercentFinal
+      ? `[1:v][0:v]scale2ref=w=iw*${scalePercentFinal}/100:h=-1[wm][base];[wm]format=rgba,colorchannelmixer=aa=${opacityFinal}[wma];[base][wma]overlay=${watermarkPosition}[v]`
+      : `[1:v]scale=w='if(lt(iw*${legacyScale},120),120,iw*${legacyScale})':h=-1,format=rgba,colorchannelmixer=aa=${opacityFinal}[wma];[0:v][wma]overlay=${watermarkPosition}[v]`;
+
     const ffmpegArgs = [
       "-i", inputTmpPath,
       "-i", watermarkPath,
       "-filter_complex", 
-      // 优先使用百分比缩放：watermark 宽度 = 主视频宽度 * (scalePercent/100)
-      // 使用 scale2ref 让水印基于主视频参考缩放，保持水印纵横比，高度自动 -1
-      (scalePercentFinal
-        ? `[1:v][0:v]scale2ref=w=iw*${scalePercentFinal}/100:h=-1[wm][base];[base][wm]overlay=${watermarkPosition}[v];[wm]format=rgba,colorchannelmixer=aa=${opacityFinal}[wm2]`
-        : `[1:v]scale=w='if(lt(iw*${legacyScale},120),120,iw*${legacyScale})':h=-1,format=rgba,colorchannelmixer=aa=${opacityFinal}[wm];[0:v][wm]overlay=${watermarkPosition}[v]`),
+      filterGraph,
       "-map", "[v]",
       "-map", "0:a?",
       "-c:v", videoCodec,
