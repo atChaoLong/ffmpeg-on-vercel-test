@@ -45,7 +45,6 @@ export default function Home() {
   const [watermarkFile, setWatermarkFile] = useState("kling.png");
   const [position, setPosition] = useState("center");
   const [opacity, setOpacity] = useState(0.7);
-  const [scalePercent, setScalePercent] = useState(30); // 10-100
   const [format, setFormat] = useState("mp4");
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
@@ -182,37 +181,38 @@ export default function Home() {
 
     setProcessing(true);
     setError("");
-    setStatus("正在添加水印...");
+    setStatus("任务已提交，开始排队处理...");
 
     try {
-      const response = await fetch("/api/video/watermark", {
+      // 1) 标记任务为 queued（立即返回）
+      const startRes = await fetch("/api/video/watermark/start", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId: currentVideo.id })
+      });
+      const startJson = await startRes.json();
+      if (!startRes.ok || !startJson?.success) {
+        throw new Error(startJson?.error || "提交任务失败");
+      }
+
+      // 2) 触发后端处理（不等待返回），前端只轮询状态
+      fetch("/api/video/watermark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           videoId: currentVideo.id,
           watermarkFile,
           position,
           opacity,
-          scalePercent, // send percent
           format,
-        }),
-      });
+        })
+      }).catch(() => {});
 
-      const result = await response.json();
-
-      if (result.success) {
-        setStatus("水印添加请求已提交，正在处理中...");
-      } else {
-        setError(result.error || "水印添加失败");
-        setProcessing(false);
-      }
+      setStatus("任务已开始处理，稍后自动刷新状态...");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "水印添加过程中发生错误";
+      const message = err instanceof Error ? err.message : "提交任务出错";
       setError(message);
       setProcessing(false);
-      console.error("Watermark error:", err);
     }
   };
 
@@ -221,7 +221,6 @@ export default function Home() {
     setWatermarkFile("kling.png");
     setPosition("center");
     setOpacity(0.7);
-    setScalePercent(30);
     setFormat("mp4");
     setStatus("");
     setError("");
@@ -339,38 +338,6 @@ export default function Home() {
                     onChange={(e) => setOpacity(parseFloat(e.target.value))}
                     className="w-full"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    水印大小: {scalePercent}%
-                  </label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    step="5"
-                    value={scalePercent}
-                    onChange={(e) => setScalePercent(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    输出格式
-                  </label>
-                  <select
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  >
-                    {formatOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
 

@@ -72,8 +72,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const watermarkFileFinal = watermarkFile || "kling.png";
     const positionFinal = position || "bottom-right";
     const opacityFinal = opacity || "0.8";
-    const scalePercentFinal = typeof scalePercent === 'number' && scalePercent > 0 ? scalePercent : undefined;
-    const legacyScale = scale || "0.25";
     const formatFinal = format || "mp4";
 
     // 设置水印位置映射
@@ -146,9 +144,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // FFmpeg 参数用于添加水印
-    const filterGraph = scalePercentFinal
-      ? `[1:v][0:v]scale2ref=w=iw*${scalePercentFinal}/100:h=-1[wm][base];[wm]format=rgba,colorchannelmixer=aa=${opacityFinal}[wma];[base][wma]overlay=${watermarkPosition}[v]`
-      : `[1:v]scale=w='if(lt(iw*${legacyScale},120),120,iw*${legacyScale})':h=-1,format=rgba,colorchannelmixer=aa=${opacityFinal}[wma];[0:v][wma]overlay=${watermarkPosition}[v]`;
+    const filterGraph = `[1:v]format=rgba,colorchannelmixer=aa=${opacityFinal}[wma];[0:v][wma]overlay=${watermarkPosition}[v]`;
 
     const ffmpegArgs = [
       "-i", inputTmpPath,
