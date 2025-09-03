@@ -148,7 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       "-i", inputTmpPath,
       "-i", watermarkPath,
       "-filter_complex", 
-      `[1:v]scale=iw*${scaleFinal}:ih*${scaleFinal},format=rgba,colorchannelmixer=aa=${opacityFinal}[watermark];[0:v][watermark]overlay=${watermarkPosition}[v]`,
+      `[1:v]scale=w='if(lt(iw*${scaleFinal},120),120,iw*${scaleFinal})':h=-1,format=rgba,colorchannelmixer=aa=${opacityFinal}[wm];[0:v][wm]overlay=${watermarkPosition}[v]`,
       "-map", "[v]",
       "-map", "0:a?",
       "-c:v", videoCodec,
