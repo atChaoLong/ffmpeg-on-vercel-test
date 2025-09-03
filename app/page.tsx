@@ -43,9 +43,9 @@ export default function Home() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentVideo, setCurrentVideo] = useState<VideoData | null>(null);
   const [watermarkFile, setWatermarkFile] = useState("kling.png");
-  const [position, setPosition] = useState("bottom-right");
-  const [opacity, setOpacity] = useState(0.8);
-  const [scale, setScale] = useState(0.1);
+  const [position, setPosition] = useState("center");
+  const [opacity, setOpacity] = useState(0.7);
+  const [scalePercent, setScalePercent] = useState(30); // 10-100
   const [format, setFormat] = useState("mp4");
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
@@ -195,7 +195,7 @@ export default function Home() {
           watermarkFile,
           position,
           opacity,
-          scale,
+          scalePercent, // send percent
           format,
         }),
       });
@@ -219,9 +219,9 @@ export default function Home() {
   const resetForm = () => {
     setCurrentVideo(null);
     setWatermarkFile("kling.png");
-    setPosition("bottom-right");
-    setOpacity(0.8);
-    setScale(0.1);
+    setPosition("center");
+    setOpacity(0.7);
+    setScalePercent(30);
     setFormat("mp4");
     setStatus("");
     setError("");
@@ -230,7 +230,7 @@ export default function Home() {
       fileInputRef.current.value = "";
     }
   };
-
+  
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -343,15 +343,15 @@ export default function Home() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    缩放比例: {scale}
+                    水印大小: {scalePercent}%
                   </label>
                   <input
                     type="range"
-                    min="0.05"
-                    max="0.5"
-                    step="0.05"
-                    value={scale}
-                    onChange={(e) => setScale(parseFloat(e.target.value))}
+                    min="10"
+                    max="100"
+                    step="5"
+                    value={scalePercent}
+                    onChange={(e) => setScalePercent(parseInt(e.target.value))}
                     className="w-full"
                   />
                 </div>
