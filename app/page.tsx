@@ -101,38 +101,76 @@ export default function Home() {
 
     setUploading(true);
     setError("");
-    setStatus("正在上传视频...");
+    setStatus("正在申请直传URL...");
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append("video", file);
-
-      const response = await fetch("/api/video/upload", {
+      // 1) 向后端申请预签名URL
+      const presignRes = await fetch("/api/video/upload-url", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type })
+      });
+      const presignJson = await presignRes.json();
+      if (!presignRes.ok || !presignJson?.uploadUrl) {
+        throw new Error(presignJson?.error || "获取直传URL失败");
+      }
+
+      const { uploadUrl, publicUrl } = presignJson as { uploadUrl: string; publicUrl: string };
+
+      setStatus("正在直传到R2...");
+
+      // 2) 使用XHR直传到R2并跟踪进度
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl, true);
+        xhr.setRequestHeader("Content-Type", file.type);
+
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            const percent = Math.round((evt.loaded / evt.total) * 100);
+            setUploadProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`直传失败: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("网络错误，直传失败"));
+        xhr.send(file);
       });
 
-      const result = await response.json();
+      setStatus("直传完成，写入数据库...");
 
-      if (result.success) {
-        setCurrentVideo({
-          id: result.videoId,
-          video_url: result.videoUrl,
-          watermark_video_url: null,
-          watermark_url: null,
-          status: 'uploaded',
-          error_message: null,
-          created_at: new Date().toISOString(),
-          updated_at: null
-        });
-        setStatus("视频上传成功！现在可以添加水印");
-        setUploadProgress(100);
-      } else {
-        setError(result.error || "上传失败");
+      // 3) 通知后端注册该视频（写入Supabase）
+      const registerRes = await fetch("/api/video/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicUrl })
+      });
+      const registerJson = await registerRes.json();
+      if (!registerRes.ok || !registerJson?.success) {
+        throw new Error(registerJson?.error || "注册视频失败");
       }
-    } catch (error) {
-      setError("上传过程中发生错误");
+
+      setCurrentVideo({
+        id: registerJson.videoId,
+        video_url: registerJson.videoUrl,
+        watermark_video_url: null,
+        watermark_url: null,
+        status: 'uploaded',
+        error_message: null,
+        created_at: new Date().toISOString(),
+        updated_at: null
+      });
+      setStatus("视频上传成功！现在可以添加水印");
+      setUploadProgress(100);
+    } catch (error: any) {
+      setError(error?.message || "上传过程中发生错误");
       console.error("Upload error:", error);
     } finally {
       setUploading(false);

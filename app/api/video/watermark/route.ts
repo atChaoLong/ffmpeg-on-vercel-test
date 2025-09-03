@@ -26,15 +26,16 @@ interface WatermarkPosition {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const tmpDir = "/tmp";
+  let inputTmpPath = "";
+  let outputPath = "";
+
   try {
     const body = await request.json();
     const { videoId, watermarkFile, position, opacity, scale, format } = body;
 
     if (!videoId) {
-      return NextResponse.json(
-        { error: "Video ID is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Video ID is required" }, { status: 400 });
     }
 
     // 从Supabase获取视频信息
@@ -44,24 +45,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .eq('id', videoId)
       .single();
 
-    if (fetchError || !videoData) {
-      return NextResponse.json(
-        { error: "Video not found" },
-        { status: 404 }
-      );
-    }
-
-    if (!videoData.video_url) {
-      return NextResponse.json(
-        { error: "Video URL not found" },
-        { status: 400 }
-      );
+    if (fetchError || !videoData?.video_url) {
+      return NextResponse.json({ error: "Video not found" }, { status: 404 });
     }
 
     // 更新状态为处理中
     await supabase
       .from('ffmpeg_on_vercel_test')
-      .update({ status: 'processing' })
+      .update({ status: 'processing', updated_at: new Date().toISOString() })
       .eq('id', videoId);
 
     const watermarkFileFinal = watermarkFile || "kling.png";
@@ -112,30 +103,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       "-crf", formatFinal === "webm" ? "30" : "23",
     ];
 
-    // 生成输出文件名（Vercel 仅允许 /tmp 写入）
-    const tmpDir = "/tmp";
-    const outputFileName = `watermark_${uuidv4()}.${formatFinal}`;
-    const outputPath = path.join(tmpDir, outputFileName);
-    const watermarkPath = path.join(process.cwd(), "public", "images", "watermark", watermarkFileFinal);
+    // 生成路径（Vercel 仅允许 /tmp 写入）
+    await fs.mkdir(tmpDir, { recursive: true }).catch(() => {});
 
-    // 确保 /tmp 目录存在（在大多数环境已存在，但加上更稳妥）
-    try {
-      await fs.mkdir(tmpDir, { recursive: true });
-    } catch {}
+    const outputFileName = `watermark_${uuidv4()}.${formatFinal}`;
+    outputPath = path.join(tmpDir, outputFileName);
+    const watermarkPath = path.join(process.cwd(), "public", "images", "watermark", watermarkFileFinal);
 
     // 检查水印文件是否存在
     try {
       await fs.access(watermarkPath);
     } catch {
-      return NextResponse.json(
-        { error: "Watermark file not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Watermark file not found" }, { status: 404 });
     }
 
-    // FFmpeg 参数用于添加水印
+    // 下载输入视频到 /tmp，避免 FFmpeg 直接拉远程URL失败
+    {
+      const inExt = (videoData.video_url.split(".").pop() || "mp4").toLowerCase();
+      inputTmpPath = path.join(tmpDir, `input_${uuidv4()}.${inExt}`);
+      const res = await fetch(videoData.video_url);
+      if (!res.ok) {
+        await supabase.from('ffmpeg_on_vercel_test').update({ status: 'failed', error_message: `无法下载视频: ${res.status}` }).eq('id', videoId);
+        return NextResponse.json({ error: `下载视频失败(${res.status})` }, { status: 502 });
+      }
+      const arrayBuffer = await res.arrayBuffer();
+      await fs.writeFile(inputTmpPath, Buffer.from(arrayBuffer));
+    }
+
+    // FFmpeg 参数用于添加水印（输入使用本地临时文件）
     const ffmpegArgs = [
-      "-i", videoData.video_url,
+      "-i", inputTmpPath,
       "-i", watermarkPath,
       "-filter_complex", 
       `[1:v]scale=iw*${scaleFinal}:ih*${scaleFinal},format=rgba,colorchannelmixer=aa=${opacityFinal}[watermark];[0:v][watermark]overlay=${watermarkPosition}[v]`,
@@ -153,142 +150,84 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ];
 
     // 运行 FFmpeg 水印处理
-    return new Promise((resolve, reject) => {
-      if (!ffmpeg) {
-        reject(NextResponse.json(
-          { error: "FFmpeg binary not found" },
-          { status: 500 }
-        ));
-        return;
-      }
+    const ffmpegPath = (ffmpeg as string) || "./node_modules/ffmpeg-static/ffmpeg";
 
-      const ffmpegPath = ffmpeg as string;
-      const processRef = spawn(ffmpegPath, ffmpegArgs, { stdio: 'pipe' });
-
+    const resultJson: any = await new Promise((resolve) => {
       let stderr = "";
-      let isClosed = false;
-      
-      console.log("FFmpeg watermark command:", ffmpegPath, ffmpegArgs.join(" "));
-      
-      processRef.stderr.on("data", (data: Buffer) => {
+      const proc = spawn(ffmpegPath, ffmpegArgs, { stdio: 'pipe' });
+
+      proc.stderr.on("data", (data: Buffer) => {
         stderr += data.toString();
         console.log("FFmpeg watermark stderr:", data.toString());
       });
 
-      processRef.on("close", async (code: number | null) => {
-        if (!isClosed) {
-          isClosed = true;
-          console.log(`FFmpeg watermark process closed with code: ${code}`);
-          
-          if (code === 0) {
-            try {
-              // 读取处理后的视频文件
-              const videoBuffer = await fs.readFile(outputPath);
-              
-              // 上传到R2
-              const key = `videos/${outputFileName}`;
-              const uploadCommand = new PutObjectCommand({
-                Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
-                Key: key,
-                Body: videoBuffer,
-                ContentType: `video/${formatFinal}`,
-              });
+      proc.on("close", async (code: number | null) => {
+        if (code === 0) {
+          try {
+            // 读取处理后的视频文件并上传到 R2
+            const videoBuffer = await fs.readFile(outputPath);
+            const key = `videos/${outputFileName}`;
+            const uploadCommand = new PutObjectCommand({
+              Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+              Key: key,
+              Body: videoBuffer,
+              ContentType: `video/${formatFinal}`,
+            });
+            await r2Client.send(uploadCommand);
 
-              await r2Client.send(uploadCommand);
+            const watermarkVideoUrl = `https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/${key}`;
 
-              // 生成访问URL
-              const watermarkVideoUrl = `https://pub-c05ff69f643944b3a4d9afdc221b3fad.r2.dev/${key}`;
-
-              // 更新Supabase
-              await supabase
-                .from('ffmpeg_on_vercel_test')
-                .update({
-                  watermark_video_url: watermarkVideoUrl,
-                  status: 'completed',
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', videoId);
-
-              // 删除临时文件
-              try {
-                await fs.unlink(outputPath);
-              } catch (error) {
-                console.log("Failed to delete temp file:", error);
-              }
-
-              resolve(NextResponse.json({
-                success: true,
-                watermarkVideoUrl: watermarkVideoUrl,
-                message: "Watermark added successfully"
-              }));
-
-            } catch (error) {
-              console.error("Error processing watermark result:", error);
-              
-              await supabase
-                .from('ffmpeg_on_vercel_test')
-                .update({
-                  status: 'failed',
-                  error_message: error instanceof Error ? error.message : 'Unknown error'
-                })
-                .eq('id', videoId);
-
-              reject(NextResponse.json(
-                { error: "Failed to process watermark result" },
-                { status: 500 }
-              ));
-            }
-          } else {
-            console.error(`FFmpeg watermark failed with code ${code}:`, stderr);
-            
             await supabase
               .from('ffmpeg_on_vercel_test')
               .update({
-                status: 'failed',
-                error_message: `FFmpeg failed with code ${code}: ${stderr}`
+                watermark_video_url: watermarkVideoUrl,
+                status: 'completed',
+                updated_at: new Date().toISOString()
               })
               .eq('id', videoId);
 
-            reject(NextResponse.json(
-              { error: `FFmpeg failed with code ${code}` },
-              { status: 500 }
-            ));
+            resolve({ success: true, watermarkVideoUrl });
+          } catch (e: any) {
+            await supabase
+              .from('ffmpeg_on_vercel_test')
+              .update({ status: 'failed', error_message: e?.message || '上传失败' })
+              .eq('id', videoId);
+            resolve({ success: false, error: e?.message || '上传失败' });
           }
+        } else {
+          await supabase
+            .from('ffmpeg_on_vercel_test')
+            .update({ status: 'failed', error_message: `FFmpeg失败 code=${code}` })
+            .eq('id', videoId);
+          resolve({ success: false, error: `FFmpeg 失败，code=${code}`, stderr });
         }
       });
 
-      processRef.on("error", async (processError: Error) => {
-        if (!isClosed) {
-          isClosed = true;
-          
-          await supabase
-            .from('ffmpeg_on_vercel_test')
-            .update({
-              status: 'failed',
-              error_message: processError.message
-            })
-            .eq('id', videoId);
-
-        reject(NextResponse.json(
-            { error: processError.message },
-            { status: 500 }
-          ));
-        }
+      proc.on("error", async (e: Error) => {
+        await supabase
+          .from('ffmpeg_on_vercel_test')
+          .update({ status: 'failed', error_message: e.message })
+          .eq('id', videoId);
+        resolve({ success: false, error: e.message });
       });
     });
 
-  } catch (error) {
+    // 清理临时文件
+    try { if (inputTmpPath) await fs.unlink(inputTmpPath); } catch {}
+    try { if (outputPath) await fs.unlink(outputPath); } catch {}
+
+    if (resultJson.success) {
+      return NextResponse.json(resultJson);
+    }
+    return NextResponse.json(resultJson, { status: 500 });
+
+  } catch (error: any) {
     console.error("Video watermark error:", error);
+    // 清理临时文件
+    try { if (inputTmpPath) await fs.unlink(inputTmpPath); } catch {}
+    try { if (outputPath) await fs.unlink(outputPath); } catch {}
 
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred";
-
-    return NextResponse.json(
-      {
-        error: "Video watermark failed",
-        details: errorMessage,
-      },
-      { status: 500 }
-    );
+    const errorMessage = error?.message || "Unknown error occurred";
+    return NextResponse.json({ error: "Video watermark failed", details: errorMessage }, { status: 500 });
   }
 }
