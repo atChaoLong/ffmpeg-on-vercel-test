@@ -38,6 +38,22 @@ interface WatermarkBody {
   format?: "mp4" | "webm";
 }
 
+function resolveFfmpegPath(): string {
+  // 尝试优先使用 ffmpeg-static 暴露的路径
+  if (typeof ffmpeg === "string" && ffmpeg) return ffmpeg;
+  try {
+    // 回退使用 require.resolve，兼容打包路径
+    const modPath = require.resolve("ffmpeg-static");
+    // ffmpeg-static 默认导出的是绝对路径字符串；如果被打包重定向，直接返回该路径
+    // 这里通过动态 import 再取默认导出，避免 ESM/CJS 差异
+    // 但在运行时我们已经有了 ffmpeg 变量；此处仅作为兜底
+    return modPath;
+  } catch (_) {
+    // 最后兜底尝试常见相对路径
+    return "./node_modules/ffmpeg-static/ffmpeg";
+  }
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const tmpDir = "/tmp";
   let inputTmpPath = "";
@@ -130,7 +146,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Watermark file not found" }, { status: 404 });
     }
 
-    // 下载输入视频到 /tmp，避免 FFmpeg 直接拉远程URL失败
+    // 下载输入视频到 /tmp
     {
       const inExt = (videoData.video_url.split(".").pop() || "mp4").toLowerCase();
       inputTmpPath = path.join(tmpDir, `input_${uuidv4()}.${inExt}`);
@@ -143,7 +159,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       await fs.writeFile(inputTmpPath, Buffer.from(arrayBuffer));
     }
 
-    // FFmpeg 参数用于添加水印（输入使用本地临时文件）
+    // FFmpeg 参数用于添加水印
     const ffmpegArgs = [
       "-i", inputTmpPath,
       "-i", watermarkPath,
@@ -163,7 +179,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ];
 
     // 运行 FFmpeg 水印处理
-    const ffmpegPath = (ffmpeg as string) || "./node_modules/ffmpeg-static/ffmpeg";
+    const ffmpegPath = resolveFfmpegPath();
 
     const resultJson: WatermarkResult = await new Promise<WatermarkResult>((resolve) => {
       let stderr = "";
@@ -177,7 +193,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       proc.on("close", async (code: number | null) => {
         if (code === 0) {
           try {
-            // 读取处理后的视频文件并上传到 R2
             const videoBuffer = await fs.readFile(outputPath);
             const key = `videos/${outputFileName}`;
             const uploadCommand = new PutObjectCommand({
