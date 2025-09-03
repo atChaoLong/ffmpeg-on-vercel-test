@@ -50,6 +50,9 @@ export default function Home() {
   const [tasks, setTasks] = useState<VideoData[]>([]);
   const settingsRef = useRef<HTMLDivElement>(null);
 
+  const processingTasks = tasks.filter(t => t.status === 'processing');
+  const queuedTasks = tasks.filter(t => t.status === 'queued');
+
   const handleSelectTask = (task: VideoData) => {
     setCurrentVideo(task);
     setStatus("已选择任务，配置下方水印参数后开始处理");
@@ -413,6 +416,21 @@ export default function Home() {
                   <p className="text-red-800">{error}</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 正在处理/排队 提示 */}
+          {(processingTasks.length > 0 || queuedTasks.length > 0) && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">当前队列</p>
+                  <p className="text-sm mt-1">
+                    进行中：{processingTasks.map(t => t.id).join(', ') || '无'}
+                    {queuedTasks.length > 0 && `，排队中：${queuedTasks.map(t => t.id).join(', ')}`}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
