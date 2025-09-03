@@ -32,11 +32,6 @@ const positionOptions = [
   { value: "center", label: "中心" },
 ];
 
-const formatOptions = [
-  { value: "mp4", label: "MP4" },
-  { value: "webm", label: "WebM" },
-];
-
 export default function Home() {
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -49,6 +44,9 @@ export default function Home() {
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [batchUploading, setBatchUploading] = useState(false);
+  const [batchStatus, setBatchStatus] = useState<string>("");
+  const [tasks, setTasks] = useState<VideoData[]>([]);
 
   // 轮询检查状态
   useEffect(() => {
@@ -83,96 +81,111 @@ export default function Home() {
     };
   }, [currentVideo]);
 
+  // 任务列表轮询
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/video/list?limit=20`);
+        const json = await res.json();
+        if (json?.success) setTasks(json.items as VideoData[]);
+      } catch {}
+    };
+    load();
+    const timer = setInterval(load, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
 
-    if (!file.type.startsWith("video/")) {
-      setError("请选择视频文件");
-      return;
+    // 基本校验
+    for (const f of files) {
+      if (!f.type.startsWith("video/")) {
+        setError("请选择视频文件");
+        return;
+      }
+      if (f.size > 100 * 1024 * 1024) {
+        setError("文件大小不能超过100MB");
+        return;
+      }
     }
 
-    if (file.size > 100 * 1024 * 1024) {
-      setError("文件大小不能超过100MB");
-      return;
-    }
-
-    setUploading(true);
+    setBatchUploading(true);
     setError("");
-    setStatus("正在申请直传URL...");
+    setStatus("");
+    setBatchStatus(`准备上传 ${files.length} 个文件...`);
     setUploadProgress(0);
 
     try {
-      // 1) 向后端申请预签名URL
-      const presignRes = await fetch("/api/video/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, contentType: file.type })
-      });
-      const presignJson = await presignRes.json();
-      if (!presignRes.ok || !presignJson?.uploadUrl) {
-        throw new Error(presignJson?.error || "获取直传URL失败");
+      let done = 0;
+      for (const file of files) {
+        setBatchStatus(`上传中 (${done + 1}/${files.length}) - ${file.name}`);
+        // 1) 申请预签名URL
+        const presignRes = await fetch("/api/video/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: file.name, contentType: file.type })
+        });
+        const presignJson = await presignRes.json();
+        if (!presignRes.ok || !presignJson?.uploadUrl) {
+          throw new Error(presignJson?.error || `获取直传URL失败: ${file.name}`);
+        }
+        const { uploadUrl, publicUrl } = presignJson as { uploadUrl: string; publicUrl: string };
+
+        // 2) 直传
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", uploadUrl, true);
+          xhr.setRequestHeader("Content-Type", file.type);
+          xhr.upload.onprogress = (evt) => {
+            if (evt.lengthComputable) {
+              const percent = Math.round((evt.loaded / evt.total) * 100);
+              setUploadProgress(percent);
+            }
+          };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`直传失败(${xhr.status}): ${file.name}`));
+          };
+          xhr.onerror = () => reject(new Error(`网络错误，直传失败: ${file.name}`));
+          xhr.send(file);
+        });
+
+        // 3) 注册
+        const registerRes = await fetch("/api/video/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ publicUrl })
+        });
+        const registerJson = await registerRes.json();
+        if (!registerRes.ok || !registerJson?.success) {
+          throw new Error(registerJson?.error || `注册视频失败: ${file.name}`);
+        }
+
+        // 将当前视频设为最新一个，便于立即操作“添加水印”
+        setCurrentVideo({
+          id: registerJson.videoId,
+          video_url: registerJson.videoUrl,
+          watermark_video_url: null,
+          watermark_url: null,
+          status: 'uploaded',
+          error_message: null,
+          created_at: new Date().toISOString(),
+          updated_at: null
+        });
+
+        done += 1;
+        setBatchStatus(`已完成 ${done}/${files.length}`);
       }
 
-      const { uploadUrl, publicUrl } = presignJson as { uploadUrl: string; publicUrl: string };
-
-      setStatus("正在直传到R2...");
-
-      // 2) 使用XHR直传到R2并跟踪进度
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl, true);
-        xhr.setRequestHeader("Content-Type", file.type);
-
-        xhr.upload.onprogress = (evt) => {
-          if (evt.lengthComputable) {
-            const percent = Math.round((evt.loaded / evt.total) * 100);
-            setUploadProgress(percent);
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`直传失败: ${xhr.status}`));
-          }
-        };
-        xhr.onerror = () => reject(new Error("网络错误，直传失败"));
-        xhr.send(file);
-      });
-
-      setStatus("直传完成，写入数据库...");
-
-      // 3) 通知后端注册该视频（写入Supabase）
-      const registerRes = await fetch("/api/video/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ publicUrl })
-      });
-      const registerJson = await registerRes.json();
-      if (!registerRes.ok || !registerJson?.success) {
-        throw new Error(registerJson?.error || "注册视频失败");
-      }
-
-      setCurrentVideo({
-        id: registerJson.videoId,
-        video_url: registerJson.videoUrl,
-        watermark_video_url: null,
-        watermark_url: null,
-        status: 'uploaded',
-        error_message: null,
-        created_at: new Date().toISOString(),
-        updated_at: null
-      });
-      setStatus("视频上传成功！现在可以添加水印");
       setUploadProgress(100);
+      setStatus(`全部完成：共 ${files.length} 个视频`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "上传过程中发生错误";
       setError(message);
-      console.error("Upload error:", err);
     } finally {
-      setUploading(false);
+      setBatchUploading(false);
     }
   };
 
@@ -248,18 +261,19 @@ export default function Home() {
                 ref={fileInputRef}
                 type="file"
                 accept="video/*"
+                multiple
                 onChange={handleFileUpload}
                 className="hidden"
-                disabled={uploading}
+                disabled={uploading || batchUploading}
               />
               
               {!currentVideo ? (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
+                  disabled={uploading || batchUploading}
                   className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {uploading ? "上传中..." : "选择视频文件"}
+                  {uploading || batchUploading ? "上传中..." : "选择视频文件"}
                 </button>
               ) : (
                 <div className="text-left">
@@ -281,6 +295,17 @@ export default function Home() {
                   ></div>
                 </div>
                 <p className="text-sm text-gray-600 mt-2">{uploadProgress}%</p>
+              </div>
+            )}
+            {batchUploading && (
+              <div className="mt-4">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+                <p className="text-sm text-gray-600 mt-2">{batchStatus}（{uploadProgress}%）</p>
               </div>
             )}
           </div>
@@ -378,6 +403,52 @@ export default function Home() {
               )}
             </div>
           )}
+
+          {/* 任务列表 */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">任务列表</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-4">ID</th>
+                    <th className="py-2 pr-4">状态</th>
+                    <th className="py-2 pr-4">原视频</th>
+                    <th className="py-2 pr-4">水印视频</th>
+                    <th className="py-2 pr-4">更新时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map(t => (
+                    <tr key={t.id} className="border-t">
+                      <td className="py-2 pr-4">{t.id}</td>
+                      <td className="py-2 pr-4">
+                        <span className={
+                          t.status === 'completed' ? 'text-green-600' :
+                          t.status === 'failed' ? 'text-red-600' :
+                          t.status === 'processing' ? 'text-blue-600' : 'text-gray-600'
+                        }>
+                          {t.status || '-'}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4 truncate max-w-[240px]">
+                        {t.video_url ? <a className="text-blue-600 hover:underline" href={t.video_url} target="_blank">原视频</a> : '-'}
+                      </td>
+                      <td className="py-2 pr-4 truncate max-w-[240px]">
+                        {t.watermark_video_url ? <a className="text-green-600 hover:underline" href={t.watermark_video_url} target="_blank">水印视频</a> : '-'}
+                      </td>
+                      <td className="py-2 pr-4">{t.updated_at ? new Date(t.updated_at).toLocaleString() : new Date(t.created_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  {tasks.length === 0 && (
+                    <tr>
+                      <td className="py-4 text-gray-500" colSpan={5}>暂无任务</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* 结果展示区域 */}
           {currentVideo && currentVideo.status === 'completed' && (

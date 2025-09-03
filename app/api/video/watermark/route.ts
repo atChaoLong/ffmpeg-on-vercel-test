@@ -1,4 +1,3 @@
-import ffmpeg from "ffmpeg-static";
 import { spawn } from "child_process";
 import fs from "fs/promises";
 import path from "path";
@@ -34,8 +33,6 @@ interface WatermarkBody {
   watermarkFile?: string;
   position?: string;
   opacity?: string;
-  scale?: string; // legacy
-  scalePercent?: number; // 10-100
   format?: "mp4" | "webm";
 }
 
@@ -46,7 +43,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body = (await request.json()) as WatermarkBody;
-    const { videoId, watermarkFile, position, opacity, scale, scalePercent, format } = body;
+    const { videoId, watermarkFile, position, opacity, format } = body;
 
     if (!videoId) {
       return NextResponse.json({ error: "Video ID is required" }, { status: 400 });
@@ -143,7 +140,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       await fs.writeFile(inputTmpPath, Buffer.from(arrayBuffer));
     }
 
-    // FFmpeg 参数用于添加水印
+    // FFmpeg 参数用于添加水印（原始尺寸）
     const filterGraph = `[1:v]format=rgba,colorchannelmixer=aa=${opacityFinal}[wma];[0:v][wma]overlay=${watermarkPosition}[v]`;
 
     const ffmpegArgs = [
@@ -164,7 +161,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       outputPath,
     ];
 
-    // 运行 FFmpeg 水印处理（与 convert 一致的可执行路径写法）
+    // 运行 FFmpeg 水印处理
     const ffmpegPath = "./node_modules/ffmpeg-static/ffmpeg";
 
     const resultJson: WatermarkResult = await new Promise<WatermarkResult>((resolve) => {

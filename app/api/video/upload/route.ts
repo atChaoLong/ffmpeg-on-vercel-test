@@ -47,7 +47,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // 生成唯一文件名
-    const fileExtension = file.name.split('.').pop();
     const fileName = `${uuidv4()}_${file.name}`;
     const key = `videos/${fileName}`;
 

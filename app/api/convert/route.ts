@@ -96,7 +96,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           if (!isClosed) {
             try {
               controller.enqueue(new Uint8Array(data));
-            } catch (error) {
+            } catch (_err) {
               // Controller might be closed, ignore the error
             }
           }
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 if (controller.desiredSize !== null) {
                   controller.close();
                 }
-              } catch (error) {
+              } catch (_err) {
                 // Controller already closed by client
               }
             } else {
@@ -125,21 +125,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
                 if (controller.desiredSize !== null) {
                   controller.error(new Error(`FFmpeg failed with code ${code}: ${stderr}`));
                 }
-              } catch (error) {
+              } catch (_err) {
                 // Controller already closed by client
               }
             }
           }
         });
 
-        process.on("error", (error: Error) => {
+        process.on("error", (_error: Error) => {
           if (!isClosed) {
             isClosed = true;
             try {
               if (controller.desiredSize !== null) {
-                controller.error(error);
+                controller.error(_error);
               }
-            } catch (error) {
+            } catch (_err) {
               // Controller already closed by client
             }
           }
