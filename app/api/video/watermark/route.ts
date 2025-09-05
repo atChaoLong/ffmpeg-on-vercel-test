@@ -112,7 +112,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       "-preset", formatFinal === "webm" ? "good" : "medium",
       "-crf", formatFinal === "webm" ? "30" : "23",
     ];
-
+    console.log(qualityArgs);
     // 生成路径（Vercel 仅允许 /tmp 写入）
     await fs.mkdir(tmpDir, { recursive: true }).catch(() => {});
 
